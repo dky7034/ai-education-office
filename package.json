@@ -1,0 +1,29 @@
+{
+  "name": "ai-education-office",
+  "version": "0.3.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others --names API,WEB \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace backend",
+    "dev:web": "npm run dev --workspace frontend -- --host 0.0.0.0 --strictPort",
+    "build": "npm run build --workspaces --if-present",
+    "build:preview": "npm run build:preview --workspace frontend",
+    "preview": "npm run start --workspace backend",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run build && playwright test",
+    "test:dev": "playwright test --config playwright.dev.config.ts",
+    "test:preview": "npm run build:preview && playwright test --config playwright.preview.config.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "concurrently": "9.2.5"
+  }
+}
