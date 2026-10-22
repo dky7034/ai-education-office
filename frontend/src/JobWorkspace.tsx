@@ -1,3 +1,5 @@
+import { useServerOffice } from "./useServerOffice";
+import type { ServerOfficeView } from "./serverOffice";
 import { JobUpdateRevision, useJobUpdates } from "./jobUpdates";
 import JobActivity from "./JobActivity";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -27,10 +29,12 @@ export default function JobWorkspace({
   accountId,
   onUnauthorized,
   refreshKey,
+  onOfficeChange,
 }: {
   accountId: string;
   onUnauthorized: () => void;
   refreshKey: number;
+  onOfficeChange?: (view: ServerOfficeView) => void;
 }) {
   const alive = useRef(true);
   useEffect(() => {
@@ -103,6 +107,13 @@ export default function JobWorkspace({
   const generation = useRef(0);
 
   const live = useJobUpdates(accountId);
+  useServerOffice(
+    accountId,
+    live.tick,
+    live.status,
+    onUnauthorized,
+    onOfficeChange,
+  );
   const [syncing, setSyncing] = useState(false);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const jobsRef = useRef(jobs);

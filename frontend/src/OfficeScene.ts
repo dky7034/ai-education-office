@@ -19,7 +19,7 @@ const W = 960,
   H = 664;
 const font = '"Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 
-/** Purely visual scene. React's simulation state owns all task state. No AI calls. */
+/** Purely visual scene. React owns the selected simulation or server read model. No AI calls. */
 export class OfficeScene extends Phaser.Scene {
   private actors = new Map<StaffId, Actor>();
   private paint!: Phaser.GameObjects.Graphics;
@@ -320,8 +320,8 @@ export class OfficeScene extends Phaser.Scene {
       actor.model = person;
       if (person.status === "오류 발생") actor.path = [];
       actor.bubble
-        .setText(person.status)
-        .setVisible(person.status !== "대기 중");
+        .setText(person.displayStatus ?? person.status)
+        .setVisible(person.status !== "대기 중" || !!person.displayStatus);
       actor.bubble.setBackgroundColor(
         person.status === "오류 발생" ? "#a44e43" : "#345c4a",
       );

@@ -72,6 +72,18 @@ export function createApp(
   app.use("/api/jobs", attachmentRoutes(store, auth.requireAccount));
   app.use("/api/jobs", runRoutes(store, auth.requireAccount));
   app.use("/api/jobs", previewRoutes(store, auth.requireAccount));
+  app.get("/api/jobs/office", (req, res) => {
+    if (Object.keys(req.query).length) {
+      res
+        .status(400)
+        .json({
+          error:
+            "오피스 현황은 계정 전체를 조회합니다. 검색 조건을 지정하지 마세요.",
+        });
+      return;
+    }
+    res.json(store.officeState(res.locals.account.id));
+  });
   app.get("/api/jobs", (req, res) => {
     const limit = req.query.limit === undefined ? 20 : Number(req.query.limit);
     const offset =
@@ -88,12 +100,10 @@ export function createApp(
         (key) => !["limit", "offset", "q", "status"].includes(key),
       )
     ) {
-      res
-        .status(400)
-        .json({
-          error:
-            "검색어는 제어 문자 없이 100자 이하, 상태는 지원하는 필터로 지정해 주세요.",
-        });
+      res.status(400).json({
+        error:
+          "검색어는 제어 문자 없이 100자 이하, 상태는 지원하는 필터로 지정해 주세요.",
+      });
       return;
     }
     if (

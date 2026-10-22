@@ -94,3 +94,5 @@ v8은 summary_run_reviews를 추가합니다. 실행별 승인·반려·대상 �
 계정별 읽기 전용 WebSocket `/api/jobs/updates?account=<UUID>`의 권한·Origin·연결 제한·종료와 스냅샷 복구 계약은 [업무 자동 갱신 안내](../docs/JOB_UPDATES.md)를 따릅니다.
 
 v9는 계정별 영구 변경 이력·커서와 원자적 기록 트리거를 추가합니다. WebSocket의 선택 cursor와 순서별 재생·재설정·마이그레이션 계약은 [영구 이벤트 안내](../docs/EVENT_REPLAY.md)를 따릅니다.
+
+`GET /api/jobs/office`는 계정 전체의 정량 집계 상태·대표 실행·최근 5개 기록을 읽기 전용으로 반환합니다. 검색/페이지 조건을 받지 않으며 상태 분류·인증·무결성 표시 한계는 [서버 오피스 안내](../docs/SERVER_OFFICE.md)를 따릅니다. 스키마 v9를 유지합니다.

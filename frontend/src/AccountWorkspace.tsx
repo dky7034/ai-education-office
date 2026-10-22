@@ -1,3 +1,4 @@
+import type { ServerOfficeView } from "./serverOffice";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { KeyRound, LogIn, LogOut, ShieldCheck } from "lucide-react";
 import JobWorkspace from "./JobWorkspace";
@@ -21,7 +22,11 @@ function clearSelected() {
   history.replaceState(null, "", url);
 }
 
-export default function AccountWorkspace() {
+export default function AccountWorkspace({
+  onOfficeChange,
+}: {
+  onOfficeChange?: (view: ServerOfficeView | null) => void;
+}) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -41,6 +46,7 @@ export default function AccountWorkspace() {
 
   function apply(next: Session) {
     if (currentId.current !== (next.user?.id ?? null)) {
+      onOfficeChange?.(null);
       if (currentId.current) clearSelected();
       setIssuedCode("");
       setRenew(false);
@@ -443,6 +449,9 @@ export default function AccountWorkspace() {
         <JobWorkspace
           key={session.user.id}
           accountId={session.user.id}
+          onOfficeChange={(view) => {
+            if (currentId.current === view.accountId) onOfficeChange?.(view);
+          }}
           refreshKey={jobsRevision}
           onUnauthorized={() => {
             if (currentId.current === session.user!.id) {

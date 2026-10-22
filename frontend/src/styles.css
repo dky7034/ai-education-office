@@ -2415,3 +2415,46 @@ h1 {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+.office-mode-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.office-mode-controls .session-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+.office-mode-controls button[aria-pressed="true"] {
+  background: #e0eee4;
+  border-color: #7e9e88;
+}
+.server-phase {
+  padding: 10px 12px;
+  background: #edf3ee;
+  border-radius: 8px;
+  font-weight: 700;
+  margin: 12px 0;
+}
+.server-current,
+.server-office-panel {
+  overflow-wrap: anywhere;
+}
+.server-recent-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.server-recent-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e5eae5;
+  overflow-wrap: anywhere;
+}
+.server-recent-list li strong {
+  flex-basis: 100%;
+}

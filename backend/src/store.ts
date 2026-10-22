@@ -1,3 +1,4 @@
+import { officeRepository } from "./officeState.ts";
 import { ACTIVITY_SCHEMA, activityRepository } from "./activityEvents.ts";
 import { jobWhere, type JobSearch } from "./jobSearch.ts";
 import { jobActivities } from "./jobActivity.ts";
@@ -197,6 +198,7 @@ export function createStore(
     ...runRepository(db),
     ...reviewRepository(db),
     ...activityRepository(db),
+    ...officeRepository(db),
     outputRoot,
     selection(
       account: string,

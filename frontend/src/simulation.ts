@@ -33,6 +33,7 @@ export type Phase =
   | "failed";
 export type Point = { x: number; y: number };
 export interface Staff {
+  displayStatus?: string;
   id: StaffId;
   name: string;
   short: string;

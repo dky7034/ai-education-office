@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import ServerOfficePanel, { ServerOfficeRecent } from "./ServerOfficePanel";
+import { serverStaff, type ServerOfficeView } from "./serverOffice";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
@@ -61,12 +63,22 @@ const phaseOrder: Phase[] = [
 
 export default function App() {
   const { state, running, start, reset, fail } = useOffice();
+  const [serverView, setServerView] = useState<ServerOfficeView | null>(null);
+  const [officeMode, setOfficeMode] = useState<"simulation" | "server">(
+    "simulation",
+  );
+  const publishOffice = useCallback((view: ServerOfficeView | null) => {
+    setServerView(view);
+    if (!view) setOfficeMode("simulation");
+  }, []);
+  const realMode = officeMode === "server" && !!serverView;
+  const people = realMode ? serverStaff(serverView!) : state.staff;
   const [selected, setSelected] = useState<StaffId>("lead");
   const [dialog, setDialog] = useState<"help" | "settings" | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const logsRef = useRef<HTMLDivElement>(null);
   const current = TASKS.find((t) => t.id === state.job?.kind);
-  const person = state.staff.find((p) => p.id === selected)!;
+  const person = people.find((p) => p.id === selected)!;
   const phaseIndex = state.job ? phaseOrder.indexOf(state.job.phase) : -1;
   const phaseLabel = state.job
     ? PHASE_LABELS[state.job.phase]
@@ -80,11 +92,12 @@ export default function App() {
     else dialogRef.current?.close();
   }, [dialog]);
   function choose(kind: TaskKind) {
-    if (running) return;
+    if (running || realMode) return;
     setSelected(TASKS.find((t) => t.id === kind)!.staff);
     start(kind);
   }
   function clear() {
+    setOfficeMode("simulation");
     reset();
     setSelected("lead");
   }
@@ -126,7 +139,7 @@ export default function App() {
             return (
               <button
                 key={task.id}
-                disabled={running}
+                disabled={running || realMode}
                 onClick={() => choose(task.id)}
                 className={`nav-item ${current?.id === task.id ? "nav-selected" : ""}`}
               >
@@ -162,7 +175,9 @@ export default function App() {
           <div className="avatar">운</div>
           <div>
             <strong>교육 운영 담당자</strong>
-            <span>시뮬레이션 워크스페이스</span>
+            <span>
+              {realMode ? "서버 집계 워크스페이스" : "시뮬레이션 워크스페이스"}
+            </span>
           </div>
         </div>
       </aside>
@@ -195,20 +210,65 @@ export default function App() {
               <h1>
                 교육운영 오피스<span className="beta">미리보기</span>
               </h1>
-              <p>업무를 선택하고, 우리 AI 직원들의 움직임을 살펴보세요.</p>
+              <p>
+                {realMode
+                  ? "서버에 저장된 집계 현황을 역할 캐릭터로 확인하세요."
+                  : "업무를 선택하고, 우리 AI 직원들의 움직임을 살펴보세요."}
+              </p>
             </div>
             <div className="mode-pill">
               <span className="dot amber" />
-              <FlaskConical size={15} />
-              시뮬레이션 모드
+              {realMode ? <Monitor size={15} /> : <FlaskConical size={15} />}
+              {realMode ? "서버 집계 현황" : "시뮬레이션 모드"}
             </div>
           </div>
+          {!__STANDALONE__ && (
+            <div
+              className="office-mode-controls"
+              role="group"
+              aria-label="오피스 표시 선택"
+            >
+              <button
+                className="secondary-button"
+                aria-pressed={!realMode}
+                onClick={() => setOfficeMode("simulation")}
+              >
+                업무 시연 보기
+              </button>
+              <button
+                className="secondary-button"
+                aria-pressed={realMode}
+                disabled={!serverView}
+                onClick={() => {
+                  reset();
+                  setOfficeMode("server");
+                  setSelected("analyst");
+                }}
+              >
+                서버 집계 보기
+              </button>
+              <p className="session-note">
+                로그인 후 계정 전체의 실제 정량 집계를 표시합니다. 서버 보기로
+                전환하면 진행 중인 시연은 초기화합니다.
+              </p>
+            </div>
+          )}
           <div className="simulation-notice">
             <ShieldCheck size={19} />
             <p>
-              <strong>오피스 캐릭터는 시뮬레이션입니다.</strong> 직원의 이동과
-              작업 상태만 시연하며, 실제 AI 호출·파일 처리·외부 발송은 실행하지
-              않습니다.
+              {realMode ? (
+                <>
+                  <strong>서버에 저장된 정량 집계 기록입니다.</strong> 캐릭터의
+                  이동은 상태를 표현하는 읽기 전용 표시입니다. 화면 전환으로
+                  집계·승인·AI 호출을 실행하지 않습니다.
+                </>
+              ) : (
+                <>
+                  <strong>오피스 캐릭터는 시뮬레이션입니다.</strong> 직원의
+                  이동과 작업 상태만 시연하며, 실제 AI 호출·파일 처리·외부
+                  발송은 실행하지 않습니다.
+                </>
+              )}
             </p>
           </div>
           <section className="overview" aria-label="오피스 요약">
@@ -229,14 +289,21 @@ export default function App() {
                 <Monitor size={20} />
               </span>
               <div>
-                <span>시연 중인 업무</span>
+                <span>{realMode ? "진행 중 서버 집계" : "시연 중인 업무"}</span>
                 <strong>
-                  {running ? "1" : "0"}
+                  {realMode
+                    ? serverView?.data
+                      ? serverView.data.totals.queued +
+                        serverView.data.totals.running
+                      : "—"
+                    : running
+                      ? "1"
+                      : "0"}
                   <span>건</span>
                 </strong>
               </div>
               <span className="stat-tag">
-                {running ? "진행 중" : "대기 중"}
+                {realMode ? "계정 전체" : running ? "진행 중" : "대기 중"}
               </span>
             </div>
             <div>
@@ -244,7 +311,7 @@ export default function App() {
                 <CheckCircle2 size={20} />
               </span>
               <div>
-                <span>실제 자동화 연결</span>
+                <span>AI 연결</span>
                 <strong className="text-stat">미연결</strong>
               </div>
               <span className="stat-tag">후속 개발</span>
@@ -252,7 +319,7 @@ export default function App() {
           </section>
 
           {!__STANDALONE__ ? (
-            <AccountWorkspace />
+            <AccountWorkspace onOfficeChange={publishOffice} />
           ) : (
             <div className="request-preview-note">
               이 단일 HTML은 오피스 시연 전용입니다. 업무 요청·영구 저장 기능은
@@ -273,7 +340,7 @@ export default function App() {
                   </div>
                   <span className="quiet-badge">탑다운 2D</span>
                 </div>
-                <OfficeMap staff={state.staff} onSelect={setSelected} />
+                <OfficeMap staff={people} onSelect={setSelected} />
                 <div className="map-footer">
                   <span>
                     <span className="dot green-dot" />
@@ -281,7 +348,7 @@ export default function App() {
                   </span>
                   <span>
                     <span className="dot amber" />
-                    시연 진행
+                    {realMode ? "서버 상태 표시" : "시연 진행"}
                   </span>
                   <span>
                     <span className="dot muted-dot" />
@@ -293,7 +360,7 @@ export default function App() {
                   </span>
                 </div>
                 <div className="staff-strip" aria-label="직원 선택">
-                  {state.staff.map((p) => (
+                  {people.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => setSelected(p.id)}
@@ -310,7 +377,7 @@ export default function App() {
                       </span>
                       <span>
                         {p.name}
-                        <small>{p.status}</small>
+                        <small>{p.displayStatus ?? p.status}</small>
                       </span>
                     </button>
                   ))}
@@ -325,9 +392,11 @@ export default function App() {
                   <div>
                     <h2 id="tasks-title">어떤 업무를 시연할까요?</h2>
                     <p>
-                      {running
-                        ? "현재 시연이 끝나면 다른 업무를 선택할 수 있어요."
-                        : "업무를 선택하면 담당 직원에게 배정하고 이동을 시작해요."}
+                      {realMode
+                        ? "시연을 시작하려면 ‘업무 시연 보기’로 전환해 주세요."
+                        : running
+                          ? "현재 시연이 끝나면 다른 업무를 선택할 수 있어요."
+                          : "업무를 선택하면 담당 직원에게 배정하고 이동을 시작해요."}
                     </p>
                   </div>
                   <span className="quiet-badge">6가지 업무</span>
@@ -339,7 +408,7 @@ export default function App() {
                       <button
                         className={`task-button ${current?.id === task.id ? "active" : ""}`}
                         key={task.id}
-                        disabled={running}
+                        disabled={running || realMode}
                         onClick={() => choose(task.id)}
                       >
                         <span className={`task-icon ${task.id}`}>
@@ -364,76 +433,80 @@ export default function App() {
             </div>
 
             <aside className="right-column" aria-label="직원 및 작업 현황">
-              <section className="card status-card">
-                <div className="card-heading">
-                  <h2>
-                    <ListChecks size={17} />
-                    작업 현황
-                  </h2>
-                  <span className={`status-tag ${running ? "busy" : ""}`}>
-                    {running ? "시연 중" : state.job ? phaseLabel : "대기 중"}
-                  </span>
-                </div>
-                <div className="current-task">
-                  <span className="section-label">현재 시뮬레이션</span>
-                  <h3>{current?.title ?? "새로운 업무를 기다려요"}</h3>
-                  <p>
-                    {current
-                      ? `${state.staff.find((p) => p.id === current.staff)!.name} 담당 · 예시 이벤트`
-                      : "왼쪽 메뉴 또는 아래 업무 카드를 선택해 주세요."}
-                  </p>
-                </div>
-                <div
-                  className="phase-announcement"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span
-                    className={`dot ${state.job?.phase === "failed" ? "red-dot" : running ? "amber" : "green-dot"}`}
-                  />
-                  {phaseLabel}
-                </div>
-                <ol className="step-list">
-                  {phaseOrder.map((phase, i) => (
-                    <li
-                      key={phase}
-                      className={
-                        i < phaseIndex
-                          ? "done"
-                          : i === phaseIndex
-                            ? "current"
-                            : ""
-                      }
-                    >
-                      <span className="step-marker">
-                        {i < phaseIndex ||
-                        (phase === "completed" &&
-                          state.job?.phase === "completed") ? (
-                          <Check size={11} />
-                        ) : (
-                          <Circle size={7} />
-                        )}
-                      </span>
-                      {PHASE_LABELS[phase]}
-                    </li>
-                  ))}
-                </ol>
-                {state.job?.phase === "failed" && (
-                  <p className="error-note" role="alert">
-                    오류 시연이 끝났습니다. 업무를 다시 선택해 새 시연을 시작할
-                    수 있어요.
-                  </p>
-                )}
-                <div className="approval-note">
-                  <Pause size={14} />
-                  <span>실제 승인·결과물은 아직 제공하지 않아요.</span>
-                </div>
-                {state.job && (
-                  <div className="job-id">
-                    시연 ID <code>{state.job.id.slice(0, 13)}</code>
+              {realMode ? (
+                <ServerOfficePanel view={serverView!} />
+              ) : (
+                <section className="card status-card">
+                  <div className="card-heading">
+                    <h2>
+                      <ListChecks size={17} />
+                      작업 현황
+                    </h2>
+                    <span className={`status-tag ${running ? "busy" : ""}`}>
+                      {running ? "시연 중" : state.job ? phaseLabel : "대기 중"}
+                    </span>
                   </div>
-                )}
-              </section>
+                  <div className="current-task">
+                    <span className="section-label">현재 시뮬레이션</span>
+                    <h3>{current?.title ?? "새로운 업무를 기다려요"}</h3>
+                    <p>
+                      {current
+                        ? `${state.staff.find((p) => p.id === current.staff)!.name} 담당 · 예시 이벤트`
+                        : "왼쪽 메뉴 또는 아래 업무 카드를 선택해 주세요."}
+                    </p>
+                  </div>
+                  <div
+                    className="phase-announcement"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span
+                      className={`dot ${state.job?.phase === "failed" ? "red-dot" : running ? "amber" : "green-dot"}`}
+                    />
+                    {phaseLabel}
+                  </div>
+                  <ol className="step-list">
+                    {phaseOrder.map((phase, i) => (
+                      <li
+                        key={phase}
+                        className={
+                          i < phaseIndex
+                            ? "done"
+                            : i === phaseIndex
+                              ? "current"
+                              : ""
+                        }
+                      >
+                        <span className="step-marker">
+                          {i < phaseIndex ||
+                          (phase === "completed" &&
+                            state.job?.phase === "completed") ? (
+                            <Check size={11} />
+                          ) : (
+                            <Circle size={7} />
+                          )}
+                        </span>
+                        {PHASE_LABELS[phase]}
+                      </li>
+                    ))}
+                  </ol>
+                  {state.job?.phase === "failed" && (
+                    <p className="error-note" role="alert">
+                      오류 시연이 끝났습니다. 업무를 다시 선택해 새 시연을
+                      시작할 수 있어요.
+                    </p>
+                  )}
+                  <div className="approval-note">
+                    <Pause size={14} />
+                    <span>실제 승인·결과물은 아직 제공하지 않아요.</span>
+                  </div>
+                  {state.job && (
+                    <div className="job-id">
+                      시연 ID <code>{state.job.id.slice(0, 13)}</code>
+                    </div>
+                  )}
+                </section>
+              )}
 
               <section
                 className="card person-card"
@@ -465,14 +538,14 @@ export default function App() {
                   <span
                     className={`dot ${person.status === "오류 발생" ? "red-dot" : person.status === "대기 중" ? "green-dot" : "amber"}`}
                   />
-                  {person.status}
+                  {person.displayStatus ?? person.status}
                 </span>
                 <dl className="person-data">
                   <dt>담당 업무</dt>
                   <dd>{person.role}</dd>
                   <dt>현재 작업</dt>
                   <dd>{person.task ?? "배정된 업무가 없습니다."}</dd>
-                  <dt>최근 시연 이력</dt>
+                  <dt>{realMode ? "최근 서버 집계 기록" : "최근 시연 이력"}</dt>
                   <dd>
                     {person.history.length ? (
                       <ul>
@@ -480,13 +553,17 @@ export default function App() {
                           <li key={i}>{entry}</li>
                         ))}
                       </ul>
+                    ) : realMode ? (
+                      "표시할 서버 집계 기록이 없습니다."
                     ) : (
                       "아직 시연 이력이 없습니다."
                     )}
                   </dd>
                 </dl>
                 <p className="person-footnote">
-                  독립 AI 에이전트가 아닌 역할별 시각화 캐릭터입니다.
+                  {realMode
+                    ? "서버 기록을 표시하는 역할 캐릭터입니다. 정량 집계는 데이터 분석가에 표시하며 승인·반려는 사용자가 확정합니다."
+                    : "독립 AI 에이전트가 아닌 역할별 시각화 캐릭터입니다."}
                 </p>
               </section>
               <div className="roadmap-note">
@@ -507,54 +584,58 @@ export default function App() {
             </aside>
           </div>
 
-          <section
-            id="event-log"
-            className="card log-card"
-            aria-labelledby="log-title"
-          >
-            <div className="card-heading">
-              <div className="log-heading">
-                <h2 id="log-title">
-                  <ClipboardList size={17} />
-                  작업 이벤트 로그
-                </h2>
-                <span className="quiet-badge">
-                  예시 이벤트 · {state.logs.length}개
-                </span>
-              </div>
-              <button className="text-button" onClick={clear}>
-                <RotateCcw size={14} />
-                시연 초기화
-              </button>
-            </div>
-            <div
-              className="logs"
-              ref={logsRef}
-              tabIndex={0}
-              aria-label="시뮬레이션 이벤트 내역"
+          {realMode ? (
+            <ServerOfficeRecent view={serverView!} />
+          ) : (
+            <section
+              id="event-log"
+              className="card log-card"
+              aria-labelledby="log-title"
             >
-              {state.logs.map((log) => (
-                <div className={`log-line ${log.level}`} key={log.id}>
-                  <time>{log.time}</time>
-                  <span className="log-kind">
-                    {log.level === "error"
-                      ? "오류 시연"
-                      : log.level === "success"
-                        ? "시연 완료"
-                        : "시뮬레이션"}
+              <div className="card-heading">
+                <div className="log-heading">
+                  <h2 id="log-title">
+                    <ClipboardList size={17} />
+                    작업 이벤트 로그
+                  </h2>
+                  <span className="quiet-badge">
+                    예시 이벤트 · {state.logs.length}개
                   </span>
-                  <p>{log.text}</p>
                 </div>
-              ))}
-            </div>
-            <div className="log-footer">
-              <span>
-                <Clock3 size={12} />
-                현재 브라우저 세션에만 보관됩니다. 새로고침하면 초기화됩니다.
-              </span>
-              <span>실제 실행 로그 아님</span>
-            </div>
-          </section>
+                <button className="text-button" onClick={clear}>
+                  <RotateCcw size={14} />
+                  시연 초기화
+                </button>
+              </div>
+              <div
+                className="logs"
+                ref={logsRef}
+                tabIndex={0}
+                aria-label="시뮬레이션 이벤트 내역"
+              >
+                {state.logs.map((log) => (
+                  <div className={`log-line ${log.level}`} key={log.id}>
+                    <time>{log.time}</time>
+                    <span className="log-kind">
+                      {log.level === "error"
+                        ? "오류 시연"
+                        : log.level === "success"
+                          ? "시연 완료"
+                          : "시뮬레이션"}
+                    </span>
+                    <p>{log.text}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="log-footer">
+                <span>
+                  <Clock3 size={12} />
+                  현재 브라우저 세션에만 보관됩니다. 새로고침하면 초기화됩니다.
+                </span>
+                <span>실제 실행 로그 아님</span>
+              </div>
+            </section>
+          )}
           <footer className="page-footer">
             <span>모아 · AI 교육운영 오피스</span>
             <span>
@@ -662,11 +743,12 @@ export default function App() {
                 <li>
                   <FileText size={17} />
                   <div>
-                    <strong>현재는 시뮬레이션 전용이에요</strong>
+                    <strong>시연과 서버 집계를 구분해요</strong>
                     <p>
-                      실제 파일 처리, AI 호출, 결과물 다운로드, 사용자 승인,
-                      메시지 발송은 수행하지 않습니다. 교육생 평가 점수도
-                      생성하지 않습니다.
+                      시연은 실제 업무를 실행하지 않습니다. 서버와 함께 실행하는
+                      앱에서는 로그인 후 ‘서버 집계 보기’로 정량 집계·검토
+                      기록을 확인할 수 있습니다. AI 호출과 외부 발송은
+                      미연결입니다.
                     </p>
                   </div>
                 </li>
