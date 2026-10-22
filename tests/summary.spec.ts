@@ -1,3 +1,4 @@
+import { readWorkbook } from "../backend/test/readWorkbook";
 import { readFile } from "node:fs/promises";
 import { csvRows } from "../backend/src/csv";
 import { expect, test, type Page } from "@playwright/test";
@@ -501,4 +502,98 @@ test("설문 척도·필수 설정 저장·복원·집계·다운로드·재시�
   await expect(panel.locator(".summary-results")).toHaveCount(0);
   await page.getByRole("checkbox", { name: "A · A", exact: true }).uncheck();
   await expect(a).toHaveCount(0);
+});
+
+test("분석 XLSX 다운로드·전체 빈도/긴 값·설문/숫자 일치·실패 재시도·오래된 설정 차단", async ({
+  page,
+}) => {
+  const long = "가".repeat(31999) + "😀" + "끝".repeat(1000);
+  const { panel, base } = await attach(
+    page,
+    "합성 XLSX 결과.csv",
+    Buffer.from(
+      "A,B\n1,0.1\n5,0.2\n,=1+1\n,01\n," +
+        long +
+        "\n" +
+        Array.from({ length: 40 }, (_, i) => ",합성-" + i).join("\n"),
+    ),
+    [0, 1],
+  );
+  const saved = await page.request.put(base + "/selection", {
+    headers: { "X-Office-Request": "1" },
+    data: {
+      sheetId: "csv",
+      headerRow: 1,
+      columns: [0, 1],
+      revision: 1,
+      questions: [{ index: 0, min: 1, max: 5, required: true }],
+    },
+  });
+  expect(saved.status()).toBe(200);
+  await page
+    .getByRole("button", { name: "저장 상태 다시 불러오기", exact: true })
+    .click();
+  await panel
+    .getByRole("button", { name: "전체 데이터 집계", exact: true })
+    .click();
+  await expect(
+    panel
+      .getByRole("group", { name: "B열 숫자 집계", exact: true })
+      .locator("dd")
+      .nth(3),
+  ).toHaveText("1.3");
+  const button = panel.getByRole("button", {
+    name: "분석 결과 XLSX 다운로드",
+    exact: true,
+  });
+  await expect(button).toBeEnabled();
+  let fail = true;
+  await page.route("**" + base + "/summary.xlsx", async (route) => {
+    if (fail) {
+      fail = false;
+      await route.abort();
+    } else await route.continue();
+  });
+  await button.click();
+  await expect(panel.getByRole("alert")).toContainText("연결");
+  const event = page.waitForEvent("download");
+  await button.click();
+  const file = await event;
+  expect(file.suggestedFilename()).toMatch(/^office-summary-.*\.xlsx$/);
+  const { sheets } = await readWorkbook(await readFile((await file.path())!));
+  expect(sheets.map((s) => s.name)).toEqual([
+    "집계 안내",
+    "전체 요약",
+    "열별 집계",
+    "설문 문항",
+    "전체 빈도",
+  ]);
+  expect(sheets[2]!.rows[2]!.values[10]).toBe("1.3");
+  expect(sheets[3]!.rows[1]!.values[13]).toBe("3");
+  expect(
+    sheets[4]!.rows.some(
+      (r) => r.values[3] === "=1+1" && r.types[3] === "inlineStr",
+    ),
+  ).toBe(true);
+  expect(
+    sheets[4]!.rows
+      .filter((r) => r.values[7] === 2)
+      .map((r) => r.values[3])
+      .join(""),
+  ).toBe(long);
+  expect(sheets[4]!.rows.length).toBeGreaterThan(40);
+  const changed = await page.request.put(base + "/selection", {
+    headers: { "X-Office-Request": "1" },
+    data: {
+      sheetId: "csv",
+      headerRow: 1,
+      columns: [0, 1],
+      revision: 2,
+      questions: [],
+    },
+  });
+  expect(changed.status()).toBe(200);
+  await button.click();
+  await expect(panel.getByRole("alert")).toContainText("다른 화면");
+  await expect(panel.locator(".summary-results")).toHaveCount(0);
 });

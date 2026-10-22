@@ -49,7 +49,7 @@ export default function FileSummary({
 }) {
   const [summary, setSummary] = useState<Summary | null>(null),
     [busy, setBusy] = useState(false),
-    [exporting, setExporting] = useState<"csv" | "html" | null>(null),
+    [exporting, setExporting] = useState<"csv" | "html" | "xlsx" | null>(null),
     [error, setError] = useState("");
   const alive = useRef(true),
     abort = useRef(new AbortController());
@@ -87,7 +87,7 @@ export default function FileSummary({
       if (alive.current) setBusy(false);
     }
   }
-  async function download(format: "csv" | "html") {
+  async function download(format: "csv" | "html" | "xlsx") {
     if (busy || exporting || !summary) return;
     setExporting(format);
     setError("");
@@ -113,7 +113,13 @@ export default function FileSummary({
       if (
         !response.headers
           .get("content-type")
-          ?.includes(format === "html" ? "text/html" : "text/csv")
+          ?.includes(
+            format === "xlsx"
+              ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              : format === "html"
+                ? "text/html"
+                : "text/csv",
+          )
       )
         throw new Error();
       const blob = await response.blob();
@@ -199,6 +205,18 @@ export default function FileSummary({
               ? "보고서 생성 중…"
               : "인쇄용 HTML 보고서 다운로드"}
           </button>
+          <button
+            className="secondary-button"
+            disabled={busy || exporting !== null}
+            onClick={() => download("xlsx")}
+          >
+            {exporting === "xlsx" ? "XLSX 생성 중…" : "분석 결과 XLSX 다운로드"}
+          </button>
+          <p className="session-note">
+            XLSX는 안내·요약·열별 집계·설문 문항·전체 빈도 5개 시트입니다. 긴
+            값은 번호를 붙여 여러 행에 나누고, 건수는 첫 조각에만 기록합니다.
+            원본 값과 정밀도 보존용 계산값은 텍스트로 저장합니다.
+          </p>
           <p className="session-note">
             HTML 보고서는 브라우저에서 열어 인쇄하거나 PDF로 저장할 수 있습니다.
             그래프 상위 10개·빈도 상위 30개를 포함합니다.

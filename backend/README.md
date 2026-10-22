@@ -78,3 +78,5 @@ v4는 열 선택용 column_selections 테이블을 추가합니다. 미리보기
 인쇄용 HTML 보고서는 `POST /api/jobs/:id/attachments/:fileId/summary.html`로 같은 검사를 적용합니다. 출력은 이스케이프한 텍스트·내장 CSS만 사용하는 5MiB 이하 단일 파일이며 스키마 변경은 없습니다. 그래프/표의 표시 한도와 API 정책은 [기초 집계 안내](../docs/BASIC_SUMMARY.md)를 따릅니다.
 
 v5는 기존 열 선택에 `questions_json`을 추가합니다. 선택 버전 하나로 설문 문항·척도·필수 여부를 함께 저장하고 모든 집계 다운로드에서 재검증합니다. API·행 유효성·문항 통계의 기준은 [설문 설정 안내](../docs/SURVEY_SETTINGS.md)를 참고하세요.
+
+`POST /api/jobs/:id/attachments/:fileId/summary.xlsx`는 같은 선택 버전의 분석 XLSX를 비캐시 첨부 파일로 반환합니다. `yazl` 3.3.1은 런타임 의존성이며 DB 스키마 v5를 유지합니다. 텍스트 셀·긴 값 분할·20MiB 제한과 API 정책은 [XLSX 내보내기 안내](../docs/XLSX_EXPORT.md)를 따릅니다.

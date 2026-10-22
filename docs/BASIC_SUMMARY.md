@@ -78,3 +78,5 @@ API의 열별 `numeric` 필드는 `{count, nonNumericCount, outOfRangeCount, sum
 [실제 숫자 집계 화면](SCREENSHOTS.md) · [숫자 집계 CSV 예시](examples/numeric-summary-sample.csv) · [숫자 집계 HTML 예시](examples/numeric-summary-sample.html)
 
 설문 설정을 저장하면 [설문 기준 집계](SURVEY_SETTINGS.md)가 별도로 추가됩니다. 기존 기초·숫자 집계는 설문 유효 행 기준으로 필터링하지 않습니다.
+
+같은 저장 설정으로 [분석 결과 XLSX 다운로드](XLSX_EXPORT.md)도 지원합니다. 전체 빈도와 긴 값 분할·명시적 텍스트 셀·숫자/설문 통계를 5개 시트로 제공합니다.

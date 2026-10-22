@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { readXlsx, MAX_FILE_BYTES } from "./attachments.ts";
 import { summaryReport, REPORT_CSP } from "./summaryReport.ts";
+import { summaryXlsx, XLSX_MIME } from "./summaryXlsx.ts";
 import { summaryCsv } from "./summaryCsv.ts";
 import { surveyQuestions } from "./survey.ts";
 import { summarize } from "./summary.ts";
@@ -189,10 +190,16 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
     }
   });
   router.post(
-    [path + "/summary", path + "/summary.csv", path + "/summary.html"],
+    [
+      path + "/summary",
+      path + "/summary.csv",
+      path + "/summary.html",
+      path + "/summary.xlsx",
+    ],
     async (req, res, next) => {
       const csv = req.path.endsWith("/summary.csv");
       const html = req.path.endsWith("/summary.html");
+      const xlsx = req.path.endsWith("/summary.xlsx");
       const item = res.locals.attachment as Attachment,
         body = req.body;
       if (
@@ -229,19 +236,22 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
           data,
           xml,
           selection,
-          csv ? { fullValues: true, frequencyLimit: Infinity } : {},
+          csv || xlsx ? { fullValues: true, frequencyLimit: Infinity } : {},
         );
         const calculatedAt = new Date().toISOString();
         const output =
-          csv || html
-            ? (csv ? summaryCsv : summaryReport)(summary, {
-                jobId: item.jobId,
-                fileId: item.id,
-                filename: item.name,
-                sourceHash: item.sha256,
-                revision: selection.revision,
-                calculatedAt,
-              })
+          csv || html || xlsx
+            ? await (xlsx ? summaryXlsx : csv ? summaryCsv : summaryReport)(
+                summary,
+                {
+                  jobId: item.jobId,
+                  fileId: item.id,
+                  filename: item.name,
+                  sourceHash: item.sha256,
+                  revision: selection.revision,
+                  calculatedAt,
+                },
+              )
             : null;
         requireAccount(req, res, () => {
           const latest = store.selection(
@@ -260,8 +270,10 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
             res.set({
               "Content-Type": html
                 ? "text/html; charset=utf-8"
-                : "text/csv; charset=utf-8",
-              "Content-Disposition": `attachment; filename="office-summary-${item.id}.${html ? "html" : "csv"}"`,
+                : xlsx
+                  ? XLSX_MIME
+                  : "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="office-summary-${item.id}.${xlsx ? "xlsx" : html ? "html" : "csv"}"`,
             });
             if (html) res.set("Content-Security-Policy", REPORT_CSP);
             res.send(output);
