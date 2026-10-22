@@ -38,7 +38,7 @@ export default function FileSummary({
 }) {
   const [summary, setSummary] = useState<Summary | null>(null),
     [busy, setBusy] = useState(false),
-    [exporting, setExporting] = useState(false),
+    [exporting, setExporting] = useState<"csv" | "html" | null>(null),
     [error, setError] = useState("");
   const alive = useRef(true),
     abort = useRef(new AbortController());
@@ -76,13 +76,13 @@ export default function FileSummary({
       if (alive.current) setBusy(false);
     }
   }
-  async function download() {
+  async function download(format: "csv" | "html") {
     if (busy || exporting || !summary) return;
-    setExporting(true);
+    setExporting(format);
     setError("");
     try {
       const response = await fetch(
-        `/api/jobs/${jobId}/attachments/${fileId}/summary.csv`,
+        `/api/jobs/${jobId}/attachments/${fileId}/summary.${format}`,
         {
           method: "POST",
           credentials: "same-origin",
@@ -99,14 +99,18 @@ export default function FileSummary({
         const data = await response.json();
         throw new ApiError(data.error, response.status);
       }
-      if (!response.headers.get("content-type")?.includes("text/csv"))
+      if (
+        !response.headers
+          .get("content-type")
+          ?.includes(format === "html" ? "text/html" : "text/csv")
+      )
         throw new Error();
       const blob = await response.blob();
       if (!alive.current) return;
       const url = URL.createObjectURL(blob),
         link = document.createElement("a");
       link.href = url;
-      link.download = `office-summary-${fileId}.csv`;
+      link.download = `office-summary-${fileId}.${format}`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (error) {
@@ -116,10 +120,10 @@ export default function FileSummary({
       setError(
         error instanceof ApiError
           ? error.message
-          : "CSV를 내려받지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
+          : "파일을 내려받지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
       );
     } finally {
-      if (alive.current) setExporting(false);
+      if (alive.current) setExporting(null);
     }
   }
   return (
@@ -153,7 +157,7 @@ export default function FileSummary({
       </details>
       <button
         className="primary-button"
-        disabled={busy || exporting}
+        disabled={busy || exporting !== null}
         onClick={run}
       >
         {busy ? "집계 중…" : "전체 데이터 집계"}
@@ -170,11 +174,24 @@ export default function FileSummary({
         <div className="summary-results" aria-label="기초 집계 결과">
           <button
             className="secondary-button"
-            disabled={busy || exporting}
-            onClick={download}
+            disabled={busy || exporting !== null}
+            onClick={() => download("csv")}
           >
-            {exporting ? "CSV 생성 중…" : "전체 빈도 CSV 다운로드"}
+            {exporting === "csv" ? "CSV 생성 중…" : "전체 빈도 CSV 다운로드"}
           </button>
+          <button
+            className="secondary-button"
+            disabled={busy || exporting !== null}
+            onClick={() => download("html")}
+          >
+            {exporting === "html"
+              ? "보고서 생성 중…"
+              : "인쇄용 HTML 보고서 다운로드"}
+          </button>
+          <p className="session-note">
+            HTML 보고서는 브라우저에서 열어 인쇄하거나 PDF로 저장할 수 있습니다.
+            그래프 상위 10개·빈도 상위 30개를 포함합니다.
+          </p>
           <p className="session-note">
             저장한 원본과 선택 버전을 다시 확인해 전체 빈도를 내보냅니다. 수식
             주입을 막기 위해 CSV 텍스트 앞에는 작은따옴표가 추가됩니다.
@@ -216,6 +233,44 @@ export default function FileSummary({
                 <dt>서로 다른 일반 값</dt>
                 <dd>{column.distinctCount}개</dd>
               </dl>
+              {column.frequencies.length > 0 && (
+                <div
+                  className="frequency-chart"
+                  aria-label={`${column.letter}열 빈도 그래프`}
+                >
+                  <p className="session-note">
+                    일반 값 {column.valueCount}개 중 상위 최대 10개 ·
+                    누락·수식·오류 제외
+                  </p>
+                  <ol>
+                    {column.frequencies.slice(0, 10).map((entry, index) => (
+                      <li key={index}>
+                        <div className="frequency-label">
+                          <span>
+                            {entry.value}
+                            {entry.valueTruncated && "… (표시 줄임)"}
+                          </span>
+                          <strong>
+                            {entry.count}건 ·{" "}
+                            {(column.valueCount
+                              ? (entry.count / column.valueCount) * 100
+                              : 0
+                            ).toFixed(1)}
+                            %
+                          </strong>
+                        </div>
+                        <div className="frequency-track" aria-hidden="true">
+                          <div
+                            style={{
+                              width: `${column.valueCount ? (entry.count / column.valueCount) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               <div
                 className="preview-table-scroll"
                 role="region"

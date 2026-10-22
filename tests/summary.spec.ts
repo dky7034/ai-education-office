@@ -206,3 +206,71 @@ test("CSV 다운로드·연결 실패 재시도·전체 빈도·오래된 선택
   await expect(panel.getByRole("alert")).toContainText("다른 화면");
   await expect(panel.locator(".summary-results")).toHaveCount(0);
 });
+
+test("실제 빈도 그래프·HTML 보고서 다운로드·안전한 오프라인 표시·인쇄", async ({
+  page,
+  context,
+}) => {
+  const { panel, base } = await attach(
+    page,
+    "합성 보고서.csv",
+    Buffer.from("A\n온라인\n온라인\n오프라인\n<script>alert(1)</script>\n"),
+    [0],
+  );
+  await panel
+    .getByRole("button", { name: "전체 데이터 집계", exact: true })
+    .click();
+  const chart = panel.locator(".frequency-chart");
+  await expect(chart.locator("li").first()).toContainText("2건 · 50.0%");
+  await expect(chart.locator(".frequency-track > div").first()).toHaveAttribute(
+    "style",
+    "width: 50%;",
+  );
+  const button = panel.getByRole("button", {
+    name: "인쇄용 HTML 보고서 다운로드",
+    exact: true,
+  });
+  await expect(button).toBeEnabled();
+  const event = page.waitForEvent("download");
+  await button.click();
+  const download = await event;
+  expect(download.suggestedFilename()).toMatch(/^office-summary-.*\.html$/);
+  const html = await readFile((await download.path())!, "utf8");
+  const report = await context.newPage();
+  const requests: string[] = [];
+  report.on("request", (r) => requests.push(r.url()));
+  await report.setContent(html);
+  await expect(
+    report.getByRole("heading", {
+      name: "선택 열 기초 집계 보고서",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(report.locator("main")).toContainText(
+    "<script>alert(1)</script>",
+  );
+  await expect(report.locator("script,img,iframe")).toHaveCount(0);
+  await expect(report.locator(".chart li").first()).toContainText(
+    "2건 · 50.0%",
+  );
+  await report.setViewportSize({ width: 393, height: 852 });
+  expect(
+    await report.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await report.emulateMedia({ media: "print" });
+  await expect(report.locator("body")).toHaveCSS(
+    "background-color",
+    "rgb(255, 255, 255)",
+  );
+  expect(requests).toEqual([]);
+  await report.close();
+  await page.request.put(base + "/selection", {
+    headers: { "X-Office-Request": "1" },
+    data: { sheetId: "csv", headerRow: 1, columns: [0], revision: 1 },
+  });
+  await button.click();
+  await expect(panel.getByRole("alert")).toContainText("다른 화면");
+  await expect(panel.locator(".summary-results")).toHaveCount(0);
+});

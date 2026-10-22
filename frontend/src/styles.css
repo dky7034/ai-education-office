@@ -2188,3 +2188,45 @@ h1 {
   overflow-wrap: anywhere;
   margin-block: 8px;
 }
+
+.frequency-chart {
+  margin: 18px 0;
+}
+.frequency-chart ol {
+  list-style: none;
+  padding: 0;
+}
+.frequency-chart li {
+  margin: 12px 0;
+}
+.frequency-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+.frequency-label span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.frequency-label strong {
+  flex-shrink: 0;
+}
+.frequency-track {
+  height: 10px;
+  margin-top: 5px;
+  background: #e8efeb;
+  border-radius: 5px;
+  overflow: hidden;
+}
+.frequency-track > div {
+  height: 100%;
+  background: #368568;
+}
+@media (max-width: 600px) {
+  .frequency-label {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+}

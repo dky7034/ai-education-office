@@ -2,6 +2,7 @@ import express, { type RequestHandler } from "express";
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { readXlsx, MAX_FILE_BYTES } from "./attachments.ts";
+import { summaryReport, REPORT_CSP } from "./summaryReport.ts";
 import { summaryCsv } from "./summaryCsv.ts";
 import { summarize } from "./summary.ts";
 import { tablePreview, PreviewError } from "./tabular.ts";
@@ -179,9 +180,10 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
     }
   });
   router.post(
-    [path + "/summary", path + "/summary.csv"],
+    [path + "/summary", path + "/summary.csv", path + "/summary.html"],
     async (req, res, next) => {
       const csv = req.path.endsWith("/summary.csv");
+      const html = req.path.endsWith("/summary.html");
       const item = res.locals.attachment as Attachment,
         body = req.body;
       if (
@@ -221,16 +223,17 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
           csv ? { fullValues: true, frequencyLimit: Infinity } : {},
         );
         const calculatedAt = new Date().toISOString();
-        const output = csv
-          ? summaryCsv(summary, {
-              jobId: item.jobId,
-              fileId: item.id,
-              filename: item.name,
-              sourceHash: item.sha256,
-              revision: selection.revision,
-              calculatedAt,
-            })
-          : null;
+        const output =
+          csv || html
+            ? (csv ? summaryCsv : summaryReport)(summary, {
+                jobId: item.jobId,
+                fileId: item.id,
+                filename: item.name,
+                sourceHash: item.sha256,
+                revision: selection.revision,
+                calculatedAt,
+              })
+            : null;
         requireAccount(req, res, () => {
           const latest = store.selection(
             res.locals.account.id,
@@ -246,9 +249,12 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
           }
           if (output) {
             res.set({
-              "Content-Type": "text/csv; charset=utf-8",
-              "Content-Disposition": `attachment; filename="office-summary-${item.id}.csv"`,
+              "Content-Type": html
+                ? "text/html; charset=utf-8"
+                : "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="office-summary-${item.id}.${html ? "html" : "csv"}"`,
             });
+            if (html) res.set("Content-Security-Policy", REPORT_CSP);
             res.send(output);
             return;
           }

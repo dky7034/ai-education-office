@@ -46,3 +46,16 @@ CSV는 UTF-8 BOM·CRLF이며 모든 필드를 큰따옴표로 감쌉니다. 한�
 API: `POST /api/jobs/:id/attachments/:fileId/summary.csv`, 본문 `{ "revision": 1 }`. 기존 집계 API와 같은 세션·계정·Origin·사용자 정의 헤더·선택 버전 검사를 적용합니다. 정상 응답은 `text/csv; charset=utf-8`와 attachment 헤더, 비캐시·nosniff 정책을 사용합니다. 오류는 JSON입니다.
 
 [실제 화면 캡처](SCREENSHOTS.md) · [실제로 다운로드한 합성 CSV 예시](examples/summary-sample.csv)
+
+
+## 빈도 그래프와 인쇄용 HTML 보고서
+
+집계 화면의 막대 그래프는 열별 **일반 값 전체**를 분모로 한 비율이며 실제 건수와 소수점 한 자리 비율을 함께 표시합니다. 누락·XLSX 수식·오류는 분모에서 제외합니다. 상위 최대 10개만 그리므로 표시 비율 합계가 100%보다 작을 수 있고 반올림 차이가 있습니다. 일반 값이 없으면 그래프를 표시하지 않습니다. 업무 진행률이나 교육생 평가가 아닙니다.
+
+**인쇄용 HTML 보고서 다운로드**는 원본 정보·SHA-256·업무/파일 ID·선택 버전·생성 시각(UTC), 집계 기준·전체/열별 건수·그래프·상위 30개 빈도·나머지 합계를 포함합니다. 원본 전체에서 계산하지만 표에는 상위 30개, 긴 값에는 200자 표시 한도를 적용합니다. 전체 빈도·전체 값은 CSV 다운로드로 확인하세요. 보고서는 생성 시점의 결과이며 앱의 이후 변경을 반영하지 않습니다.
+
+파일을 브라우저에서 열고 인쇄 메뉴에서 인쇄 또는 PDF 저장을 선택합니다. 외부 폰트·이미지·스크립트·네트워크 요청 없이 동작하는 단일 파일입니다. 원본의 HTML·URL은 텍스트로만 표시하며 HTML 특수 문자를 이스케이프하고 CSP로 스크립트·외부 리소스·폼을 차단합니다. 인쇄 시 페이지 여백·배율은 브라우저 설정에 따라 달라질 수 있습니다.
+
+API: `POST /api/jobs/:id/attachments/:fileId/summary.html`, JSON `{ "revision": 1 }`. 기존 집계/CSV와 같은 세션·소유권·Origin·원본 해시·선택 버전 재검증을 거칩니다. `text/html; charset=utf-8`, 안전한 고정 패턴 파일명 `office-summary-<fileId>.html`의 attachment·no-store·nosniff·CSP 헤더로 응답합니다. 5MiB를 넘으면 부분 파일 대신 422 JSON 오류를 반환합니다. DB·원본·업무 상태를 수정하거나 서버에 보고서를 보관하지 않습니다.
+
+[실제로 다운로드한 합성 HTML 보고서](examples/summary-report-sample.html)
