@@ -29,3 +29,6 @@ test-results/
 
 # Store defaults used by isolated tests or custom database paths
 database/attachments/
+
+# Isolated store default for persisted run output files
+database/results/

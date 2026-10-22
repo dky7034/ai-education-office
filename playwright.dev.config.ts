@@ -16,6 +16,7 @@ export default defineConfig({
       PORT: "3001",
       OFFICE_DB_PATH: "database/e2e-dev.sqlite",
       OFFICE_INPUT_DIR: "storage/input/e2e-dev",
+      OFFICE_OUTPUT_DIR: "storage/output/e2e-dev",
     },
     reuseExistingServer: false,
   },

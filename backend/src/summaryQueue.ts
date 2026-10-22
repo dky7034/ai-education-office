@@ -1,3 +1,10 @@
+import {
+  outputPaths,
+  publishArtifactSet,
+  discardOutputs,
+  sweepOutputs,
+  type RunArtifact,
+} from "./runArtifacts.ts";
 import { Worker } from "node:worker_threads";
 import { randomUUID } from "node:crypto";
 import type { Store } from "./store.ts";
@@ -8,6 +15,7 @@ export function createSummaryQueue(
   const owner = randomUUID(),
     poll = options.pollMs ?? 250,
     timeout = options.timeoutMs ?? 15000;
+  let lastSweep = 0;
   let timer: ReturnType<typeof setInterval> | null = null,
     leased = false,
     closed = false;
@@ -16,6 +24,7 @@ export function createSummaryQueue(
     worker: Worker;
     timeout: ReturnType<typeof setTimeout>;
     done: boolean;
+    paths: { stage: string; final: string };
     terminating?: Promise<void>;
   };
   let active: Active | null = null;
@@ -24,15 +33,27 @@ export function createSummaryQueue(
     result: unknown,
     error: string | null,
     record = true,
+    artifacts: RunArtifact[] = [],
   ) {
     if (state.done) return state.terminating ?? Promise.resolve();
     state.done = true;
     clearTimeout(state.timeout);
     if (record) {
       try {
-        store.finishSummaryRun(owner, state.id, result, error);
+        if (!error && store.summaryRunStatus(state.id) === "running")
+          publishArtifactSet(state.paths.stage, state.paths.final, artifacts);
+        store.finishSummaryRun(owner, state.id, result, error, artifacts);
       } catch {
-        leased = false;
+        try {
+          store.finishSummaryRun(
+            owner,
+            state.id,
+            null,
+            "집계 결과 파일을 보관하지 못했습니다. 보관 경로와 저장 공간을 확인해 주세요.",
+          );
+        } catch {
+          leased = false;
+        }
         console.error(
           "집계 상태를 저장하지 못했습니다. 큐 소유권을 다시 확인합니다.",
         );
@@ -45,6 +66,11 @@ export function createSummaryQueue(
         () => {},
       )
       .finally(() => {
+        let keepFinal = true;
+        try {
+          keepFinal = store.summaryRunStatus(state.id) === "completed";
+        } catch {}
+        discardOutputs(state.paths.stage, state.paths.final, keepFinal);
         if (active === state) active = null;
       });
     return state.terminating;
@@ -55,10 +81,25 @@ export function createSummaryQueue(
       if (active) return;
       leased = store.acquireSummaryLease(owner);
       if (!leased) return;
+      lastSweep = 0;
     } else if (!store.renewSummaryLease(owner)) {
       leased = false;
       if (active) void finish(active, null, null, false);
       return;
+    }
+    if (Date.now() - lastSweep >= 30000) {
+      lastSweep = Date.now();
+      try {
+        sweepOutputs(
+          store.outputRoot,
+          (id) => store.summaryRunStatus(id),
+          active?.paths.stage,
+        );
+      } catch {
+        console.error(
+          "집계 보관 경로를 정리하지 못했습니다. 저장 공간과 경로를 확인해 주세요.",
+        );
+      }
     }
     if (active) {
       if (!active.done && store.summaryRunStatus(active.id) !== "running")
@@ -89,6 +130,7 @@ export function createSummaryQueue(
       );
       return;
     }
+    const paths = outputPaths(store.outputRoot, run.id, randomUUID());
     try {
       const worker = new Worker(
         options.workerUrl ??
@@ -105,6 +147,11 @@ export function createSummaryQueue(
             hash: run.sourceHash,
             format: file.format,
             selection,
+            stage: paths.stage,
+            runId: run.id,
+            jobId: run.jobId,
+            fileId: run.fileId,
+            filename: file.name,
           },
           execArgv: [],
           resourceLimits: {
@@ -117,6 +164,7 @@ export function createSummaryQueue(
       const state: Active = {
         id: run.id,
         worker,
+        paths,
         done: false,
         timeout: setTimeout(() => {
           void finish(state, null, "집계 실행 제한 시간을 초과했습니다.");
@@ -124,8 +172,11 @@ export function createSummaryQueue(
       };
       active = state;
       worker.on("message", (message) => {
-        if (state.done || closed) return;
-        if (message?.ok === true) void finish(state, message.summary, null);
+        // Node's --watch also relays dependency notifications over this port.
+        // Only application result messages may finish a run.
+        if (state.done || closed || typeof message?.ok !== "boolean") return;
+        if (message.ok === true)
+          void finish(state, message.summary, null, true, message.artifacts);
         else
           void finish(
             state,

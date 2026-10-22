@@ -1,3 +1,4 @@
+import { ARTIFACT_SCHEMA } from "./runArtifacts.ts";
 import { runRepository, RUN_SCHEMA } from "./runStore.ts";
 import type { SurveyQuestion } from "./survey.ts";
 import { DatabaseSync } from "node:sqlite";
@@ -92,6 +93,7 @@ const selectJob = `SELECT id, owner_id, request_key, payload_hash, kind, title, 
 export function createStore(
   filename: string,
   attachmentRoot = join(dirname(filename), "attachments"),
+  outputRoot = join(dirname(filename), "results"),
 ) {
   if (filename !== ":memory:")
     mkdirSync(dirname(filename), { recursive: true, mode: 0o700 });
@@ -103,7 +105,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 6) {
+  if (version > 7) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -175,9 +177,11 @@ export function createStore(
     COMMIT;
   `);
   if (version < 6) db.exec(RUN_SCHEMA);
+  if (version < 7) db.exec(ARTIFACT_SCHEMA);
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
     ...runRepository(db),
+    outputRoot,
     selection(
       account: string,
       jobId: string,

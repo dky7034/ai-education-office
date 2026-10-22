@@ -69,7 +69,7 @@ export function createApp(
   app.use("/api/auth", auth.router);
   app.use("/api/jobs", auth.requireAccount);
   app.use("/api/jobs", attachmentRoutes(store, auth.requireAccount));
-  app.use("/api/jobs", runRoutes(store));
+  app.use("/api/jobs", runRoutes(store, auth.requireAccount));
   app.use("/api/jobs", previewRoutes(store, auth.requireAccount));
   app.get("/api/jobs", (req, res) => {
     const limit = req.query.limit === undefined ? 20 : Number(req.query.limit);

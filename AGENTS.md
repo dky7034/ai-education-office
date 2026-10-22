@@ -28,4 +28,6 @@
 
 - XLSX 내보내기는 summaryXlsx.ts의 5개 시트·명시적 텍스트 셀·전체 빈도와 긴 값 분할을 유지합니다. 빈도/원문 길이는 첫 조각에만 기록하고 서로게이트 쌍을 나누지 않습니다. XML/압축 각각 20MiB 제한과 ZIP 생성 후 세션/버전 재검증을 적용합니다. docs/XLSX_EXPORT.md를 따릅니다.
 
-- 현재 스키마 v6는 summary_runs / summary_run_events / summary_queue_lease를 추가합니다. 큐는 정량 집계 전용 Node 워커이며 AI/오피스 시뮬레이션과 별개입니다. 전환·취소·lease·설정 버전/원본·5MiB 결과 한도를 유지하고, 정상 종료 시 워커를 종료한 뒤 DB를 닫습니다. 저장 결과와 현재 버전 파일 다운로드를 구분합니다. docs/BACKGROUND_SUMMARY.md를 따릅니다.
+- v6는 summary_runs / summary_run_events / summary_queue_lease를 추가합니다. 큐는 정량 집계 전용 Node 워커이며 AI/오피스 시뮬레이션과 별개입니다. 전환·취소·lease·설정 버전/원본·5MiB 결과 한도를 유지하고, 정상 종료 시 워커를 종료한 뒤 DB를 닫습니다. 저장 결과와 현재 버전 파일 다운로드를 구분합니다. docs/BACKGROUND_SUMMARY.md를 따릅니다.
+
+- 현재 스키마 v7은 summary_run_artifacts를 추가합니다. 완료 상태·JSON·3종 파일 메타데이터를 한 트랜잭션으로 확정하며 임시 파일 검증·fsync·rename 뒤 저장합니다. 출력 기본 storage/output/runs는 입력·테스트와 분리하고 DB·입력·출력을 함께 백업합니다. 과거 완료 파일을 현재 설정으로 소급 생성하지 않습니다. docs/RUN_ARTIFACTS.md를 따릅니다.

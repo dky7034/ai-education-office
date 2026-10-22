@@ -1,8 +1,17 @@
-import express from "express";
+import express, { type RequestHandler } from "express";
+import {
+  ARTIFACT_FORMATS,
+  ARTIFACT_MIME,
+  ArtifactError,
+  REPORT_CSP,
+  outputFile,
+  readArtifact,
+  type ArtifactFormat,
+} from "./runArtifacts.ts";
 import type { Store } from "./store.ts";
 import { RunError } from "./runStore.ts";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export function runRoutes(store: Store) {
+export function runRoutes(store: Store, requireAccount: RequestHandler) {
   const router = express.Router(),
     base = "/:id/attachments/:fileId/runs";
   router.use(base, (req, res, next) => {
@@ -76,6 +85,48 @@ export function runRoutes(store: Store) {
       else next(error);
     }
   });
+  router.get(base + "/:runId/artifacts/:format", async (req, res, next) => {
+    const id = String(req.params.runId),
+      format = String(req.params.format) as ArtifactFormat;
+    if (!uuid.test(id) || !ARTIFACT_FORMATS.includes(format)) {
+      res.status(404).json({ error: "보관 파일을 찾을 수 없습니다." });
+      return;
+    }
+    try {
+      const artifacts = store.summaryRunArtifacts(...scope(req, res), id);
+      const artifact = artifacts?.find((a) => a.format === format);
+      if (!artifact) {
+        res.status(404).json({ error: "이 작업에 보관된 파일이 없습니다." });
+        return;
+      }
+      const bytes = await readArtifact(
+        outputFile(store.outputRoot, id, format),
+        artifact,
+      );
+      requireAccount(req, res, () => {
+        if (
+          !store
+            .summaryRunArtifacts(...scope(req, res), id)
+            ?.some((a) => a.format === format && a.sha256 === artifact.sha256)
+        ) {
+          res.status(404).json({ error: "보관 파일을 찾을 수 없습니다." });
+          return;
+        }
+        res.set({
+          "Content-Type": ARTIFACT_MIME[format],
+          "Content-Disposition": `attachment; filename="office-run-${id}.${format}"`,
+        });
+        if (format === "html") res.set("Content-Security-Policy", REPORT_CSP);
+        res.send(bytes);
+      });
+    } catch (error) {
+      if (error instanceof ArtifactError)
+        res.status(409).json({ error: error.message });
+      else if (error instanceof RunError)
+        res.status(error.status).json({ error: error.message });
+      else next(error);
+    }
+  });
   router.get([base + "/:runId", base + "/:runId/result"], (req, res, next) => {
     const id = String(req.params.runId);
     if (!uuid.test(id)) {
@@ -90,7 +141,14 @@ export function runRoutes(store: Store) {
         res.status(404).json({ error: "집계 작업을 찾을 수 없습니다." });
         return;
       }
-      res.json(req.path.endsWith("/result") ? { summary: result } : result);
+      res.json(
+        req.path.endsWith("/result")
+          ? {
+              summary: result,
+              artifacts: store.summaryRunArtifacts(...scope(req, res), id),
+            }
+          : result,
+      );
     } catch (error) {
       if (error instanceof RunError)
         res.status(error.status).json({ error: error.message });

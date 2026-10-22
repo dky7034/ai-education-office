@@ -15,6 +15,7 @@ interface ExportMeta {
   sourceHash: string;
   revision: number;
   calculatedAt: string;
+  runId?: string;
 }
 // Escape literal OOXML escape patterns first. Then encode XML-forbidden code units and CR.
 // Keep tab/LF and valid surrogate pairs, including astral characters at chunk boundaries.
@@ -149,6 +150,7 @@ export async function summaryXlsx(
       ["제목 행", summary.headerRow],
     ] as const)
       row([name, value]);
+    if (meta.runId) row(["집계 작업 ID", meta.runId]);
     for (const rule of [
       NUMERIC_RULE,
       SURVEY_RULE,

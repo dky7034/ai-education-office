@@ -11,6 +11,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535)
 const store = createStore(
   resolve(root, process.env.OFFICE_DB_PATH ?? "database/office.sqlite"),
   resolve(root, process.env.OFFICE_INPUT_DIR ?? "storage/input/jobs"),
+  resolve(root, process.env.OFFICE_OUTPUT_DIR ?? "storage/output/runs"),
 );
 const app = createApp(store, {
   frontendDir: resolve(root, "frontend/dist"),

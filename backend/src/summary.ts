@@ -110,3 +110,24 @@ export function summarize(
     }),
   };
 }
+
+// Derive the stored/HTML display from the same full-frequency calculation used by files.
+export function displaySummary(full: ReturnType<typeof summarize>) {
+  return {
+    ...full,
+    columns: full.columns.map((c) => {
+      const frequencies = c.frequencies.slice(0, FREQUENCY_LIMIT);
+      return {
+        ...c,
+        frequencies: frequencies.map((f) => ({
+          ...f,
+          value: f.value.slice(0, 200),
+          valueTruncated: f.value.length > 200,
+        })),
+        otherDistinctCount: c.distinctCount - frequencies.length,
+        otherCount:
+          c.valueCount - frequencies.reduce((sum, f) => sum + f.count, 0),
+      };
+    }),
+  };
+}

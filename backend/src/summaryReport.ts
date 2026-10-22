@@ -9,6 +9,7 @@ interface ReportMeta {
   sourceHash: string;
   revision: number;
   calculatedAt: string;
+  runId?: string;
 }
 export const REPORT_CSP =
   "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
@@ -104,7 +105,7 @@ export function summaryReport(
     .join("");
   const html = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${escape(REPORT_CSP)}"><title>선택 열 기초 집계 보고서</title><style>
 *{box-sizing:border-box}body{font-family:system-ui,sans-serif;color:#183a32;background:#f3f7f5;margin:0;padding:24px;line-height:1.6}main{max-width:900px;margin:auto;background:white;padding:32px;border-radius:16px}h1{font-size:26px}h2{font-size:20px}section{border-top:1px solid #cbded5;margin-top:28px;padding-top:16px}dl{display:flex;flex-wrap:wrap;gap:12px}dl>div{background:#edf5f0;padding:12px;flex:1;min-width:120px}dt{font-size:13px}dd{margin:0;font-size:24px;font-weight:bold}.decimal{overflow-wrap:anywhere;font-size:18px}.numeric-summary{border:1px solid #dbe5df;padding:12px;margin:16px 0}.meta{overflow-wrap:anywhere;font-size:13px}.chart{list-style:none;padding:0}.chart li{margin:14px 0;break-inside:avoid}.label{display:flex;justify-content:space-between;gap:16px;overflow-wrap:anywhere}.label span{min-width:0;white-space:pre-wrap}.label strong{flex-shrink:0}.track{height:12px;background:#edf1ef;border-radius:6px;overflow:hidden}.track>div{height:100%;background:#368568}table{width:100%;border-collapse:collapse;table-layout:fixed}caption{text-align:left;font-weight:bold}th,td{padding:8px;border-bottom:1px solid #dbe5df;text-align:left;overflow-wrap:anywhere;white-space:pre-wrap}th:last-child,td:last-child{width:80px;text-align:right}.note{color:#486458;font-size:14px}@media(max-width:600px){body{padding:8px}main{padding:16px}.label{flex-wrap:wrap;gap:0}}@media print{body{background:white;padding:0}main{padding:0;max-width:none}h2,caption{break-after:avoid}tr{break-inside:avoid}thead{display:table-header-group}.track,.track>div{print-color-adjust:exact}}
-</style></head><body><main><h1>선택 열 기초 집계 보고서</h1><p class="note">저장 원본의 정량 집계입니다. AI 해석·교육생 평가·자동 발송은 수행하지 않습니다. 브라우저에서 열어 인쇄하거나 PDF로 저장할 수 있습니다.</p><div class="meta"><p>원본 파일: ${escape(meta.filename)}<br>시트: ${escape(summary.sheetName)} · 제목 ${summary.headerRow}행 · 선택 버전 ${meta.revision}<br>생성 시각(UTC): ${escape(meta.calculatedAt)}<br>업무 ID: ${escape(meta.jobId)}<br>원본 파일 ID: ${escape(meta.fileId)}<br>원본 SHA-256: ${escape(meta.sourceHash)}</p></div>${counts(
+</style></head><body><main><h1>선택 열 기초 집계 보고서</h1><p class="note">저장 원본의 정량 집계입니다. AI 해석·교육생 평가·자동 발송은 수행하지 않습니다. 브라우저에서 열어 인쇄하거나 PDF로 저장할 수 있습니다.</p><div class="meta"><p>원본 파일: ${escape(meta.filename)}<br>시트: ${escape(summary.sheetName)} · 제목 ${summary.headerRow}행 · 선택 버전 ${meta.revision}<br>생성 시각(UTC): ${escape(meta.calculatedAt)}<br>업무 ID: ${escape(meta.jobId)}${meta.runId ? `<br>집계 작업 ID: ${escape(meta.runId)}` : ""}<br>원본 파일 ID: ${escape(meta.fileId)}<br>원본 SHA-256: ${escape(meta.sourceHash)}</p></div>${counts(
     [
       ["제목 이후 전체 행", summary.totalRows],
       ["집계 포함 행", summary.includedRows],

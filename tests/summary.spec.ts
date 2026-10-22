@@ -629,9 +629,9 @@ test("백그라운드 집계 응답 유실 재시도·실제 워커 완료·저�
   await expect(queue.getByRole("alert")).toContainText("연결");
   await button.click();
   await expect(queue.locator(".summary-run-list > li")).toHaveCount(1);
-  await expect(queue.locator(".summary-run-list > li").first()).toContainText(
-    "완료",
-  );
+  await expect(
+    queue.locator(".summary-run-list > li").first().locator("strong"),
+  ).toHaveText("완료");
   await queue
     .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
     .click();
@@ -650,6 +650,50 @@ test("백그라운드 집계 응답 유실 재시도·실제 워커 완료·저�
     .locator("summary")
     .click();
   await expect(stored.getByText("0.3", { exact: true })).toBeVisible();
+  const files = new Map<string, Buffer>();
+  async function downloadStored(format: string) {
+    const pending = page.waitForEvent("download");
+    await stored
+      .getByRole("button", {
+        name: `보관 ${format.toUpperCase()} 다운로드`,
+        exact: true,
+      })
+      .click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toMatch(
+      new RegExp(`^office-run-.*\\.${format}$`),
+    );
+    return readFile((await download.path())!);
+  }
+  for (const format of ["csv", "html", "xlsx"])
+    files.set(format, await downloadStored(format));
+  expect(files.get("csv")!.toString()).toContain("0.3");
+  expect(files.get("html")!.toString()).toContain("0.3");
+  expect((await readWorkbook(files.get("xlsx")!)).sheets).toHaveLength(5);
+  let loseDownload = true;
+  await page.route("**" + base + "/runs/*/artifacts/csv", async (route) => {
+    if (loseDownload) {
+      loseDownload = false;
+      await route.abort();
+    } else await route.continue();
+  });
+  await stored
+    .getByRole("button", { name: "보관 CSV 다운로드", exact: true })
+    .click();
+  await expect(queue.getByRole("alert")).toContainText("연결");
+  await expect(stored).toBeVisible();
+  expect(await downloadStored("csv")).toEqual(files.get("csv"));
+  const changed = await page.request.put(base + "/selection", {
+    headers: { "X-Office-Request": "1" },
+    data: {
+      sheetId: "csv",
+      headerRow: 1,
+      columns: [1],
+      questions: [],
+      revision: 1,
+    },
+  });
+  expect(changed.status()).toBe(200);
   await page.reload();
   await page
     .getByRole("button", { name: "합성 큐.csv 미리보기", exact: true })
@@ -663,7 +707,9 @@ test("백그라운드 집계 응답 유실 재시도·실제 워커 완료·저�
     "3행",
     "1행",
   ]);
-  await page.getByRole("checkbox", { name: "A · A", exact: true }).uncheck();
+  for (const [format, bytes] of files)
+    expect(await downloadStored(format)).toEqual(bytes);
+  await page.getByRole("checkbox", { name: "A · A", exact: true }).check();
   await expect(button).toBeDisabled();
   await expect(stored).toBeVisible();
   expect(

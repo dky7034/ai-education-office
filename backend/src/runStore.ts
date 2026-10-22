@@ -1,3 +1,4 @@
+import { validArtifacts, type RunArtifact } from "./runArtifacts.ts";
 import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import type { ColumnSelection } from "./store.ts";
@@ -257,6 +258,28 @@ export function runRepository(db: DatabaseSync) {
         ).result,
       );
     },
+    summaryRunArtifacts(
+      account: string,
+      jobId: string,
+      fileId: string,
+      id: string,
+    ) {
+      const run = internal(id);
+      if (
+        !run ||
+        run.accountId !== account ||
+        run.jobId !== jobId ||
+        run.fileId !== fileId
+      )
+        return null;
+      if (run.status !== "completed")
+        throw new RunError(409, "완료된 집계 파일이 없습니다.");
+      return db
+        .prepare(
+          "SELECT format,size,sha256,created_at AS createdAt FROM summary_run_artifacts WHERE run_id=? ORDER BY format",
+        )
+        .all(id) as unknown as RunArtifact[];
+    },
     cancelSummaryRun(
       account: string,
       jobId: string,
@@ -340,6 +363,7 @@ export function runRepository(db: DatabaseSync) {
       id: string,
       result: unknown,
       error: string | null = null,
+      artifacts: RunArtifact[] = [],
     ) {
       return transaction(() => {
         if (!ownsLease(owner)) return false;
@@ -361,6 +385,17 @@ export function runRepository(db: DatabaseSync) {
             "집계 결과가 저장 한도 5MiB를 초과했습니다.",
             null,
           );
+        if (!validArtifacts(artifacts))
+          return finish(
+            id,
+            "failed",
+            "집계 결과 파일을 모두 생성하지 못했습니다.",
+            null,
+          );
+        for (const a of artifacts)
+          db.prepare(
+            "INSERT INTO summary_run_artifacts(run_id,format,size,sha256,created_at) VALUES (?,?,?,?,?)",
+          ).run(id, a.format, a.size, a.sha256, a.createdAt);
         return finish(id, "completed", null, json);
       });
     },

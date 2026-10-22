@@ -12,6 +12,12 @@ interface Run {
   finishedAt: string | null;
   sourceHash: string;
 }
+interface Artifact {
+  format: "csv" | "html" | "xlsx";
+  size: number;
+  sha256: string;
+  createdAt: string;
+}
 interface RunPage {
   runs: Run[];
   page: { total: number; hasMore: boolean };
@@ -43,9 +49,11 @@ export default function BackgroundSummary({
     [busy, setBusy] = useState(false),
     [offset, setOffset] = useState(0),
     [version, setVersion] = useState(0);
-  const [stored, setStored] = useState<{ run: Run; summary: Summary } | null>(
-    null,
-  );
+  const [stored, setStored] = useState<{
+    run: Run;
+    summary: Summary;
+    artifacts: Artifact[];
+  } | null>(null);
   const mounted = useRef(true),
     abort = useRef(new AbortController()),
     requestKey = useRef<string | null>(null);
@@ -145,13 +153,61 @@ export default function BackgroundSummary({
     setError("");
     setStored(null);
     try {
-      const value = await jobsApi<{ summary: Summary }>(
+      const value = await jobsApi<{ summary: Summary; artifacts: Artifact[] }>(
         `${base}/${run.id}/result`,
         { headers, signal: abort.current.signal },
       );
-      if (mounted.current) setStored({ run, summary: value.summary });
+      if (mounted.current)
+        setStored({
+          run,
+          summary: value.summary,
+          artifacts: value.artifacts ?? [],
+        });
     } catch (e) {
       fail(e);
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+  async function download(artifact: Artifact) {
+    if (busy || !stored) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/jobs${base}/${stored.run.id}/artifacts/${artifact.format}`,
+        {
+          credentials: "same-origin",
+          headers,
+          signal: abort.current.signal,
+        },
+      );
+      if (!response.ok) {
+        const data = await response.json();
+        throw new ApiError(data.error, response.status);
+      }
+      const mime =
+        artifact.format === "xlsx"
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : `text/${artifact.format}`;
+      if (!response.headers.get("content-type")?.includes(mime))
+        throw new Error("보관 파일 응답을 확인하지 못했습니다.");
+      const blob = await response.blob();
+      if (!mounted.current) return;
+      const url = URL.createObjectURL(blob),
+        link = document.createElement("a");
+      link.href = url;
+      link.download = `office-run-${stored.run.id}.${artifact.format}`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) {
+      fail(
+        e instanceof ApiError
+          ? e
+          : new Error(
+              "보관 파일을 내려받지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
+            ),
+      );
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -162,8 +218,8 @@ export default function BackgroundSummary({
       <p className="session-note">
         현재 저장한 파일·설정 버전으로 정량 집계를 접수합니다. 화면을 닫거나
         로그아웃해도 서버에서 계속 처리하며 AI는 호출하지 않습니다. 결과는 생성
-        당시의 기록이며 현재 설정과 다를 수 있습니다. 파일 다운로드 버튼은 현재
-        설정으로 다시 계산합니다.
+        당시의 기록이며 현재 설정과 다를 수 있습니다. 저장된 결과의 보관 파일은
+        다시 계산하지 않고 생성 당시 파일 그대로 내려받습니다.
       </p>
       <button
         className="secondary-button"
@@ -276,6 +332,33 @@ export default function BackgroundSummary({
             {stored.summary.sheetName} · 제목 {stored.summary.headerRow}행
           </p>
           <p className="session-note">원본 SHA-256: {stored.run.sourceHash}</p>
+          {stored.artifacts.length ? (
+            <div>
+              <p className="session-note">
+                생성 당시 보관 파일 · 현재 열·설문 설정과 관계없이 동일한 파일을
+                내려받습니다.
+              </p>
+              {stored.artifacts.map((a) => (
+                <div key={a.format}>
+                  <button
+                    className="secondary-button"
+                    disabled={busy}
+                    onClick={() => download(a)}
+                  >
+                    보관 {a.format.toUpperCase()} 다운로드
+                  </button>
+                  <p className="session-note">
+                    {a.size.toLocaleString("ko-KR")}바이트 · SHA-256: {a.sha256}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="session-note">
+              보관 파일이 없는 이전 작업입니다. 저장된 집계 결과는 계속 확인할
+              수 있습니다. 파일이 필요하면 새 집계 작업을 접수해 주세요.
+            </p>
+          )}
           <dl className="numeric-counts stored-row-counts">
             <dt>제목 이후 전체 행</dt>
             <dd>{stored.summary.totalRows}행</dd>

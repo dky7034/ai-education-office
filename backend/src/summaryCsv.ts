@@ -10,6 +10,7 @@ interface ExportMeta {
   sourceHash: string;
   revision: number;
   calculatedAt: string;
+  runId?: string;
 }
 // User-derived text is always prefixed, even when its current first character is harmless.
 // Numbers are emitted only from server-computed counts, never from source cell strings.
@@ -47,6 +48,7 @@ export function summaryCsv(
       "",
     ]);
   metadata("업무 ID", meta.jobId, true);
+  if (meta.runId) metadata("집계 작업 ID", meta.runId, true);
   metadata("원본 파일 ID", meta.fileId, true);
   metadata("원본 파일명", meta.filename, true);
   metadata("원본 SHA-256", meta.sourceHash, true);
