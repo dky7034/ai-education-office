@@ -1,3 +1,4 @@
+import AiRuns from "./AiRuns";
 import { useServerOffice } from "./useServerOffice";
 import type { ServerOfficeView } from "./serverOffice";
 import { JobUpdateRevision, useJobUpdates } from "./jobUpdates";
@@ -280,6 +281,7 @@ export default function JobWorkspace({
     setTarget(nextTarget);
     const url = new URL(location.href);
     url.searchParams.set("job", id);
+    if (id !== selected) url.searchParams.delete("aiRun");
     if (nextTarget) {
       url.searchParams.set("file", nextTarget.fileId);
       url.searchParams.set("run", nextTarget.runId);
@@ -680,6 +682,8 @@ export default function JobWorkspace({
                     />
                   </section>
                   <JobUpdateRevision.Provider value={live.revision}>
+                    <AiRuns key={`${accountId}:${detail.job.id}`} jobId={detail.job.id}
+                      accountId={accountId} refreshKey={live.tick} onUnauthorized={onUnauthorized} />
                     <Attachments
                       key={detail.job.id}
                       target={target}

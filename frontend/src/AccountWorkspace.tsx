@@ -19,6 +19,7 @@ const failure = (e: unknown) =>
 function clearSelected() {
   const url = new URL(location.href);
   url.searchParams.delete("job");
+  url.searchParams.delete("aiRun");
   history.replaceState(null, "", url);
 }
 

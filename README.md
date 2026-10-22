@@ -134,6 +134,7 @@ docs/                 # 기술 설계·로드맵·검증 내역
 - [기술 구조 및 Codex 연동 검토](docs/ARCHITECTURE.md)
 - [Codex 통신·단일 텍스트 실행 계약·검사 명령](docs/CODEX_ADAPTER.md)
 - [AI 실행 기록·큐·권한·복구 API](docs/AI_QUEUE.md)
+- [AI 초안·실행 이력 화면 안내](docs/AI_UI.md)
 - [Phase 1~6 개발 로드맵](docs/ROADMAP.md)
 - [검증 결과와 사용자 확인 절차](docs/VALIDATION.md)
 - [계정·권한·복구 안내](docs/AUTHENTICATION.md)

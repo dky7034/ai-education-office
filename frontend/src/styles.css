@@ -2458,3 +2458,20 @@ h1 {
 .server-recent-list li strong {
   flex-basis: 100%;
 }
+
+
+.ai-runs {
+  min-width: 0;
+  margin: 18px 0;
+  padding: 12px;
+  border: 1px solid #b6cbbd;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.ai-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ai-run-list { list-style: none; padding: 0; }
+.ai-run-list > li, .ai-run-detail { border-top: 1px solid #dbe5df; padding: 12px 0; }
+.ai-run-detail h5 { margin: 8px 0; }
+.ai-events { padding-left: 20px; font-size: 12px; color: #4d6556; }
+.ai-text { margin-top: 12px; padding: 10px; border: 1px solid #b6cbbd; border-radius: 6px; }
+.ai-text pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.65; }
