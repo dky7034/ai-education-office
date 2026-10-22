@@ -1,4 +1,5 @@
 import type { summarize } from "./summary.ts";
+import { SURVEY_RULE } from "./survey.ts";
 import { NUMERIC_RULE } from "./numericSummary.ts";
 import { PreviewError } from "./tabular.ts";
 export const MAX_EXPORT_BYTES = 20 * 1024 * 1024;
@@ -71,6 +72,67 @@ export function summaryCsv(
     "자동 평가·AI 해석·메시지 발송은 수행하지 않습니다.",
   ];
   for (const rule of rules) add(["집계 기준", "", "", "", "", "", rule, ""]);
+  if (summary.survey) {
+    add(["설문 기준", "", "", "", "", "", SURVEY_RULE, ""]);
+    for (const [name, count] of [
+      ["유효 응답 행", summary.survey.validRows],
+      ["기준 미충족 행", summary.survey.invalidRows],
+    ] as const)
+      add(["설문 전체", "", "", name, "", count, "", ""]);
+    for (const q of summary.survey.questions) {
+      const label = text(q.label);
+      for (const [name, value] of [
+        ["척도 최솟값", String(q.min)],
+        ["척도 최댓값", String(q.max)],
+        ["응답 기준", q.required ? "필수" : "선택"],
+      ] as const)
+        add([
+          "설문 설정",
+          q.letter,
+          label,
+          name,
+          text(value),
+          "",
+          "양 끝값 포함 정수 척도",
+          "",
+        ]);
+      for (const [name, count] of [
+        ["유효값", q.validCount],
+        ["누락", q.missingCount],
+        ["수식 제외", q.formulaCount],
+        ["오류 제외", q.errorCount],
+        ["숫자 아님", q.nonNumericCount],
+        ["정수 아님", q.nonIntegerCount],
+        ["범위 밖", q.outOfRangeCount],
+      ] as const)
+        add([
+          "설문 문항",
+          q.letter,
+          label,
+          name,
+          "",
+          count,
+          "문항별 유효 여부; 행 전체 기준과 별도",
+          "",
+        ]);
+      for (const [name, value] of [
+        ["유효값 합계", q.sum],
+        ["유효값 평균", q.mean],
+        ["유효값 최솟값", q.minValue],
+        ["유효값 최댓값", q.maxValue],
+      ] as const)
+        add([
+          "설문 문항",
+          q.letter,
+          label,
+          name,
+          value === null ? "" : text(value),
+          "",
+          value === null ? "유효값 없음" : "정밀도 보존용 텍스트",
+          "",
+        ]);
+    }
+  }
   for (const column of summary.columns) {
     const label = text(column.label);
     for (const [name, count] of [

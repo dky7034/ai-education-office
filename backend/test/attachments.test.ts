@@ -310,7 +310,7 @@ test("v2 계정·업무·이벤트를 v3 첨부 테이블 추가 후에도 보�
       assert.equal(
         (db.prepare("PRAGMA user_version").get() as { user_version: number })
           .user_version,
-        4,
+        5,
       );
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
     } finally {

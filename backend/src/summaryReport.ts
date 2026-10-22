@@ -1,4 +1,5 @@
 import type { summarize } from "./summary.ts";
+import { SURVEY_RULE } from "./survey.ts";
 import { NUMERIC_RULE } from "./numericSummary.ts";
 import { PreviewError } from "./tabular.ts";
 interface ReportMeta {
@@ -26,6 +27,41 @@ export function summaryReport(
 ) {
   const counts = (items: [string, number][]) =>
     `<dl>${items.map(([label, count]) => `<div><dt>${escape(label)}</dt><dd>${count.toLocaleString("ko-KR")}</dd></div>`).join("")}</dl>`;
+  const survey = summary.survey
+    ? `<section><h2>설문 기준 집계 결과</h2><p class="note">${escape(SURVEY_RULE)}</p>${counts(
+        [
+          ["유효 응답 행", summary.survey.validRows],
+          ["기준 미충족 행", summary.survey.invalidRows],
+        ],
+      )}${summary.survey.questions
+        .map(
+          (q) =>
+            `<h3>${escape(q.letter)} · ${escape(q.label)} · ${q.min}~${q.max} 정수 · ${q.required ? "필수" : "선택"}</h3>${counts(
+              [
+                ["유효값", q.validCount],
+                ["누락", q.missingCount],
+                ["수식 제외", q.formulaCount],
+                ["오류 제외", q.errorCount],
+                ["숫자 아님", q.nonNumericCount],
+                ["정수 아님", q.nonIntegerCount],
+                ["범위 밖", q.outOfRangeCount],
+              ],
+            )}<dl>${(
+              [
+                ["유효값 합계", q.sum],
+                ["유효값 평균", q.mean],
+                ["유효값 최솟값", q.minValue],
+                ["유효값 최댓값", q.maxValue],
+              ] as const
+            )
+              .map(
+                ([name, value]) =>
+                  `<div><dt>${name}</dt><dd class="decimal">${escape(value ?? "—")}</dd></div>`,
+              )
+              .join("")}</dl>`,
+        )
+        .join("")}</section>`
+    : "";
   const columns = summary.columns
     .map(
       (c) =>
@@ -74,7 +110,7 @@ export function summaryReport(
       ["집계 포함 행", summary.includedRows],
       ["선택 열 공란 제외 행", summary.excludedRows],
     ],
-  )}<section><h2>집계 기준</h2><ul><li>선택한 시트·제목 행·열의 전체 데이터를 계산합니다. 선택 열이 모두 공란인 행은 제외합니다. 행 수는 응답자 수가 아닙니다.</li><li>앞뒤 공백만 제거하며 대소문자·숫자 표기·내부 공백을 유지합니다. XLSX 수식·오류는 별도로 세며 실행하지 않습니다. CSV 수식 모양은 문자열입니다.</li><li>숫자·날짜는 원본 저장값, 불리언은 표시 문자열입니다. 숨김 시트·행·열도 포함될 수 있습니다.</li><li>막대의 분모는 일반 값 전체입니다. 상위 10개 그래프·30개 빈도를 표시하며 긴 값은 200자로 줄입니다. 전체 빈도와 원문은 앱의 CSV 다운로드에서 확인하세요.</li><li>원본·저장 선택·업무 상태는 변경하지 않습니다. 생성 시점의 결과이며 이후 변경을 반영하지 않습니다.</li></ul></section>${columns}</main></body></html>`;
+  )}<section><h2>집계 기준</h2><ul><li>선택한 시트·제목 행·열의 전체 데이터를 계산합니다. 선택 열이 모두 공란인 행은 제외합니다. 행 수는 응답자 수가 아닙니다.</li><li>앞뒤 공백만 제거하며 대소문자·숫자 표기·내부 공백을 유지합니다. XLSX 수식·오류는 별도로 세며 실행하지 않습니다. CSV 수식 모양은 문자열입니다.</li><li>숫자·날짜는 원본 저장값, 불리언은 표시 문자열입니다. 숨김 시트·행·열도 포함될 수 있습니다.</li><li>막대의 분모는 일반 값 전체입니다. 상위 10개 그래프·30개 빈도를 표시하며 긴 값은 200자로 줄입니다. 전체 빈도와 원문은 앱의 CSV 다운로드에서 확인하세요.</li><li>원본·저장 선택·업무 상태는 변경하지 않습니다. 생성 시점의 결과이며 이후 변경을 반영하지 않습니다.</li></ul></section>${survey}${columns}</main></body></html>`;
   const result = Buffer.from(html);
   if (result.length > byteLimit)
     throw new PreviewError(

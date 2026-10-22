@@ -31,7 +31,7 @@ SQLite v4는 기존 계정·업무·첨부를 보존하고 `column_selections` �
 | --- | --- |
 | `GET /api/jobs/:id/attachments/:fileId/preview` | `{ preview, selection }`. 저장된 설정이 있으면 기본으로 적용 |
 | `GET .../preview?sheetId=0&headerRow=2` | 지정한 시트·제목 행의 미리보기. CSV 시트 ID는 `csv`, XLSX는 통합 문서 순서의 `0`, `1`, … |
-| `PUT /api/jobs/:id/attachments/:fileId/selection` | `{ sheetId, headerRow, columns, revision }` 저장 후 `{ selection }` |
+| `PUT /api/jobs/:id/attachments/:fileId/selection` | `{ sheetId, headerRow, columns, revision, questions? }` 저장 후 `{ selection }` |
 
 PUT은 JSON, `X-Office-Request: 1`, 유효한 세션이 필요합니다. UI는 `X-Office-Account`도 전송합니다. 최초 revision은 0이며 이후 GET의 selection.revision을 전송합니다. 선택 열은 중복 없는 0 기반 정수입니다. 임의 필드는 거부합니다.
 
@@ -40,3 +40,5 @@ PUT은 JSON, `X-Office-Request: 1`, 유효한 세션이 필요합니다. UI는 `
 ZIP·XML 업로드 방어는 [첨부 안내](ATTACHMENTS.md), 계정 복구는 [인증 안내](AUTHENTICATION.md)를 참고하세요. 현재 파싱은 제한된 입력에 대해 Node 프로세스에서 실행하며, 공개 운영을 위한 전용 워커·실행 시간 격리·전체 저장량 제한은 후속 과제입니다. 실제 개인정보 파일은 넣지 않습니다.
 
 선택을 저장한 뒤 실행하는 수동 누락·빈도 집계는 [기초 집계 안내](BASIC_SUMMARY.md)를 참고하세요.
+
+v5는 열 선택에 설문 설정을 추가합니다. 선택 열에서 문항·정수 척도·필수 여부를 지정하고 같은 버전으로 함께 저장합니다. `questions`를 생략하면 설문 설정이 초기화됩니다. [설문 설정 안내](SURVEY_SETTINGS.md)를 참고하세요.

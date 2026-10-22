@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import SurveyResults, { type SurveyResult } from "./SurveyResults";
 import { jobsApi, ApiError } from "./jobsApi";
 interface Summary {
+  survey: SurveyResult | null;
   revision: number;
   sourceHash: string;
   calculatedAt: string;
@@ -221,6 +223,7 @@ export default function FileSummary({
           {summary.includedRows === 0 && (
             <p role="status">선택한 열에 집계할 값이 없습니다.</p>
           )}
+          {summary.survey && <SurveyResults survey={summary.survey} />}
           {summary.columns.map((column) => (
             <section
               className="column-summary"

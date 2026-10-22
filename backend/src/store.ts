@@ -1,3 +1,4 @@
+import type { SurveyQuestion } from "./survey.ts";
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -56,6 +57,7 @@ export interface Attachment {
   createdAt: string;
 }
 export interface ColumnSelection {
+  questions: SurveyQuestion[];
   sheetId: string;
   headerRow: number;
   columns: number[];
@@ -100,7 +102,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 4) {
+  if (version > 5) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -164,6 +166,13 @@ export function createStore(
     PRAGMA user_version = 4;
     COMMIT;
   `);
+  if (version < 5)
+    db.exec(`
+    BEGIN IMMEDIATE;
+    ALTER TABLE column_selections ADD COLUMN questions_json TEXT NOT NULL DEFAULT '[]';
+    PRAGMA user_version = 5;
+    COMMIT;
+  `);
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
     selection(
@@ -173,28 +182,38 @@ export function createStore(
     ): ColumnSelection | null {
       const row = db
         .prepare(
-          `SELECT s.sheet_id AS sheetId, s.header_row AS headerRow, s.columns_json AS columnsJson, s.source_hash AS sourceHash, s.revision, s.updated_at AS updatedAt FROM column_selections s JOIN attachments a ON a.id = s.file_id JOIN jobs j ON j.id = a.job_id WHERE j.account_id = ? AND j.id = ? AND a.id = ?`,
+          `SELECT s.sheet_id AS sheetId, s.header_row AS headerRow, s.columns_json AS columnsJson, s.questions_json AS questionsJson, s.source_hash AS sourceHash, s.revision, s.updated_at AS updatedAt FROM column_selections s JOIN attachments a ON a.id = s.file_id JOIN jobs j ON j.id = a.job_id WHERE j.account_id = ? AND j.id = ? AND a.id = ?`,
         )
         .get(account, jobId, fileId) as
         | {
             sheetId: string;
             headerRow: number;
             columnsJson: string;
+            questionsJson: string;
             sourceHash: string;
             revision: number;
             updatedAt: string;
           }
         | undefined;
       if (!row) return null;
-      const { columnsJson, ...rest } = row;
-      return { ...rest, columns: JSON.parse(columnsJson) as number[] };
+      const { columnsJson, questionsJson, ...rest } = row;
+      return {
+        ...rest,
+        columns: JSON.parse(columnsJson) as number[],
+        questions: JSON.parse(questionsJson) as SurveyQuestion[],
+      };
     },
     saveSelection(
       account: string,
       jobId: string,
       fileId: string,
       expectedRevision: number,
-      input: { sheetId: string; headerRow: number; columns: number[] },
+      input: {
+        sheetId: string;
+        headerRow: number;
+        columns: number[];
+        questions?: SurveyQuestion[];
+      },
     ) {
       db.exec("BEGIN IMMEDIATE");
       try {
@@ -212,7 +231,7 @@ export function createStore(
         const updatedAt = new Date().toISOString(),
           columns = [...input.columns].sort((a, b) => a - b);
         db.prepare(
-          `INSERT INTO column_selections VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(file_id) DO UPDATE SET sheet_id=excluded.sheet_id, header_row=excluded.header_row, columns_json=excluded.columns_json, source_hash=excluded.source_hash, revision=excluded.revision, updated_at=excluded.updated_at`,
+          `INSERT INTO column_selections (file_id, sheet_id, header_row, columns_json, source_hash, revision, updated_at, questions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(file_id) DO UPDATE SET sheet_id=excluded.sheet_id, header_row=excluded.header_row, columns_json=excluded.columns_json, source_hash=excluded.source_hash, revision=excluded.revision, updated_at=excluded.updated_at, questions_json=excluded.questions_json`,
         ).run(
           fileId,
           input.sheetId,
@@ -221,10 +240,12 @@ export function createStore(
           source.sha256,
           revision + 1,
           updatedAt,
+          JSON.stringify(input.questions ?? []),
         );
         db.exec("COMMIT");
         return {
           ...input,
+          questions: input.questions ?? [],
           columns,
           sourceHash: source.sha256,
           revision: revision + 1,

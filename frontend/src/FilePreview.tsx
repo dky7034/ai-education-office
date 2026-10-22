@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import SurveySettings, { type QuestionDraft } from "./SurveySettings";
 import FileSummary from "./FileSummary";
 import { ApiError, jobsApi } from "./jobsApi";
 interface Selection {
+  questions: { index: number; min: number; max: number; required: boolean }[];
   sheetId: string;
   headerRow: number;
   columns: number[];
@@ -39,6 +41,7 @@ export default function FilePreview({
   const [result, setResult] = useState<Result | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null),
     [headerRow, setHeaderRow] = useState<number | null>(null);
+  const [questions, setQuestions] = useState<QuestionDraft[]>([]);
   const [chosen, setChosen] = useState<number[]>([]);
   const [loading, setLoading] = useState(true),
     [saving, setSaving] = useState(false);
@@ -88,6 +91,16 @@ export default function FilePreview({
             ? selected.columns
             : [],
         );
+        setQuestions(
+          selected?.sheetId === data.preview.sheetId &&
+            selected.headerRow === data.preview.headerRow
+            ? selected.questions.map((q) => ({
+                ...q,
+                min: String(q.min),
+                max: String(q.max),
+              }))
+            : [],
+        );
         setDirty(false);
       })
       .catch((e) => {
@@ -100,6 +113,23 @@ export default function FilePreview({
   }, [jobId, fileId, accountId, sheetId, headerRow, version]);
   async function save() {
     if (!result || saving || !chosen.length || loading) return;
+    if (
+      questions.some(
+        (q) =>
+          q.min.trim() === "" ||
+          q.max.trim() === "" ||
+          !Number.isSafeInteger(Number(q.min)) ||
+          !Number.isSafeInteger(Number(q.max)) ||
+          Number(q.min) < -1000000 ||
+          Number(q.max) > 1000000 ||
+          Number(q.min) > Number(q.max),
+      )
+    ) {
+      setError(
+        "문항 척도의 최솟값·최댓값을 -1,000,000~1,000,000 사이의 정수로 확인해 주세요.",
+      );
+      return;
+    }
     setSaving(true);
     setError("");
     setNotice("");
@@ -114,6 +144,11 @@ export default function FilePreview({
             sheetId: result.preview.sheetId,
             headerRow: result.preview.headerRow,
             columns: chosen,
+            questions: questions.map((q) => ({
+              ...q,
+              min: Number(q.min),
+              max: Number(q.max),
+            })),
             revision: result.selection?.revision ?? 0,
           }),
         },
@@ -257,6 +292,10 @@ export default function FilePreview({
                         ? [...previous, column.index]
                         : previous.filter((index) => index !== column.index),
                     );
+                    if (!e.target.checked)
+                      setQuestions((previous) =>
+                        previous.filter((q) => q.index !== column.index),
+                      );
                     setDirty(true);
                     setNotice("");
                   }}
@@ -265,6 +304,18 @@ export default function FilePreview({
               </label>
             ))}
           </fieldset>
+          <SurveySettings
+            columns={result.preview.columns.filter((c) =>
+              chosen.includes(c.index),
+            )}
+            questions={questions}
+            disabled={saving || loading}
+            onChange={(value) => {
+              setQuestions(value);
+              setDirty(true);
+              setNotice("");
+            }}
+          />
           <button
             className="secondary-button"
             disabled={saving || loading || !chosen.length}
@@ -274,8 +325,8 @@ export default function FilePreview({
           </button>
           {dirty && (
             <p className="session-note">
-              저장하지 않은 열 선택이 있습니다. 시트·제목 행 변경이나 다시
-              불러오기는 현재 선택을 초기화합니다.
+              저장하지 않은 열 선택·설문 설정이 있습니다. 시트·제목 행 변경이나
+              다시 불러오기는 현재 선택을 초기화합니다.
             </p>
           )}
           {result.selection &&

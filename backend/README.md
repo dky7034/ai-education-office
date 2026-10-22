@@ -61,7 +61,7 @@ POST 본문 예시:
 
 ## DB와 보존
 
-현재 스키마는 `PRAGMA user_version=4`입니다. v1의 `sessions`, `jobs`, `job_events`를 보존하고 `users`, 세션의 사용자 참조, 업무의 계정 참조·인덱스를 추가합니다. FK·WAL·busy timeout을 사용합니다. DB 파일 권한은 가능한 환경에서 0600, 새 상위 디렉터리는 0700으로 설정합니다. DB는 암호화되지 않습니다. Windows 파일 권한은 별도 점검이 필요합니다.
+현재 스키마는 `PRAGMA user_version=5`입니다. v1의 `sessions`, `jobs`, `job_events`를 보존하고 `users`, 세션의 사용자 참조, 업무의 계정 참조·인덱스를 추가합니다. FK·WAL·busy timeout을 사용합니다. DB 파일 권한은 가능한 환경에서 0600, 새 상위 디렉터리는 0700으로 설정합니다. DB는 암호화되지 않습니다. Windows 파일 권한은 별도 점검이 필요합니다.
 
 설치·빌드·서버 시작 시 DB나 업무를 초기화하지 않습니다. DB·WAL·SHM은 Git에서 제외합니다. 복사는 서버를 정상 종료한 뒤 진행하세요. 온라인 백업·보존 기간·삭제 API는 후속 단계입니다. 테스트는 임시 DB 또는 `database/e2e.sqlite`를 사용해 기본 DB와 분리합니다.
 
@@ -71,8 +71,10 @@ XLSX/CSV 첨부·다운로드는 [첨부 안내](../docs/ATTACHMENTS.md)에 정�
 
 v4는 열 선택용 column_selections 테이블을 추가합니다. 미리보기·열 선택 API는 [미리보기 안내](../docs/FILE_PREVIEW.md)에 정리했습니다.
 
-저장된 선택 버전으로 원본 전체를 계산하는 집계 API는 [기초 집계 안내](../docs/BASIC_SUMMARY.md)를 따릅니다. 집계 결과는 별도 DB 저장 없이 반환하며 스키마 v4는 유지합니다.
+저장된 선택 버전으로 원본 전체를 계산하는 집계 API는 [기초 집계 안내](../docs/BASIC_SUMMARY.md)를 따릅니다. 집계 결과는 별도 DB 저장 없이 반환하며 결과는 별도 저장하지 않습니다.
 
 전체 빈도 CSV는 `POST /api/jobs/:id/attachments/:fileId/summary.csv`로 같은 저장 버전과 원본을 재검증해 내려줍니다. 출력 형식·텍스트 보호·20MiB 제한은 [기초 집계 안내](../docs/BASIC_SUMMARY.md)를 따릅니다.
 
 인쇄용 HTML 보고서는 `POST /api/jobs/:id/attachments/:fileId/summary.html`로 같은 검사를 적용합니다. 출력은 이스케이프한 텍스트·내장 CSS만 사용하는 5MiB 이하 단일 파일이며 스키마 변경은 없습니다. 그래프/표의 표시 한도와 API 정책은 [기초 집계 안내](../docs/BASIC_SUMMARY.md)를 따릅니다.
+
+v5는 기존 열 선택에 `questions_json`을 추가합니다. 선택 버전 하나로 설문 문항·척도·필수 여부를 함께 저장하고 모든 집계 다운로드에서 재검증합니다. API·행 유효성·문항 통계의 기준은 [설문 설정 안내](../docs/SURVEY_SETTINGS.md)를 참고하세요.

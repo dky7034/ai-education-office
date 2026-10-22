@@ -351,3 +351,154 @@ test("숫자 부분집합·정확한 소수 합계·빈 숫자 결과와 CSV/HTM
     }
   }
 });
+
+test("설문 척도·필수 설정 저장·복원·집계·다운로드·재시도와 충돌 복구", async ({
+  page,
+  context,
+}) => {
+  const { panel, base } = await attach(
+    page,
+    "합성 설문.csv",
+    Buffer.from(
+      "A,B,C\n1,5,\n5,,\n,3,\n6,2,\n2.5,1,\n문자,4,\n,,다른 열만\n,,\n",
+    ),
+    [0, 1, 2],
+  );
+  const a = page.getByRole("group", { name: "A열 문항 설정", exact: true }),
+    b = page.getByRole("group", { name: "B열 문항 설정", exact: true });
+  await a.getByRole("checkbox").first().check();
+  await b.getByRole("checkbox").first().check();
+  await b.getByRole("checkbox", { name: "필수 응답", exact: true }).uncheck();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "열 선택 저장", exact: true }).click();
+  await panel
+    .getByRole("button", { name: "전체 데이터 집계", exact: true })
+    .click();
+  const survey = panel.getByRole("region", {
+    name: "설문 기준 집계 결과",
+    exact: true,
+  });
+  await expect(survey.locator(".survey-row-counts dd")).toHaveText([
+    "2행",
+    "5행",
+  ]);
+  await expect(
+    survey
+      .getByRole("group", { name: "A열 설문 집계", exact: true })
+      .locator("dd"),
+  ).toHaveText([
+    "2개",
+    "2개",
+    "0개",
+    "0개",
+    "1개",
+    "1개",
+    "1개",
+    "6",
+    "3",
+    "1",
+    "5",
+  ]);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "합성 설문.csv 미리보기", exact: true })
+    .click();
+  await expect(a.getByLabel("A열 척도 최댓값")).toHaveValue("5");
+  await expect(
+    b.getByRole("checkbox", { name: "필수 응답", exact: true }),
+  ).not.toBeChecked();
+  await a.getByLabel("A열 척도 최솟값").fill("8");
+  await page.getByRole("button", { name: "열 선택 저장", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "파일 내용 미리보기·열 선택" })
+      .getByRole("alert"),
+  ).toContainText("척도");
+  await a.getByLabel("A열 척도 최솟값").fill("1");
+  await a.getByLabel("A열 척도 최댓값").fill("3");
+  let fail = true;
+  await page.route("**" + base + "/selection", async (route) => {
+    if (fail) {
+      fail = false;
+      await route.abort();
+    } else await route.continue();
+  });
+  await page.getByRole("button", { name: "열 선택 저장", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "파일 내용 미리보기·열 선택" })
+      .getByRole("alert"),
+  ).toContainText("연결");
+  await page.getByRole("button", { name: "열 선택 저장", exact: true }).click();
+  await panel
+    .getByRole("button", { name: "전체 데이터 집계", exact: true })
+    .click();
+  await expect(survey.locator(".survey-row-counts dd")).toHaveText([
+    "1행",
+    "6행",
+  ]);
+  for (const format of ["csv", "html"] as const) {
+    const event = page.waitForEvent("download");
+    await panel
+      .getByRole("button", {
+        name:
+          format === "csv"
+            ? "전체 빈도 CSV 다운로드"
+            : "인쇄용 HTML 보고서 다운로드",
+        exact: true,
+      })
+      .click();
+    const bytes = await readFile((await (await event).path())!);
+    if (format === "csv")
+      expect(
+        [...csvRows(bytes)].some(
+          (r) =>
+            r[0] === "설문 전체" && r[3] === "유효 응답 행" && r[5] === "1",
+        ),
+      ).toBe(true);
+    else {
+      const report = await context.newPage();
+      await report.setContent(bytes.toString());
+      await expect(
+        report.getByRole("heading", {
+          name: "설문 기준 집계 결과",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(report.locator("main")).toContainText("1~3 정수 · 필수");
+      await report.setViewportSize({ width: 393, height: 852 });
+      expect(
+        await report.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await report.close();
+    }
+  }
+  const external = await page.request.put(base + "/selection", {
+    headers: { "X-Office-Request": "1" },
+    data: {
+      sheetId: "csv",
+      headerRow: 1,
+      columns: [0, 1, 2],
+      revision: 3,
+      questions: [{ index: 0, min: 1, max: 4, required: true }],
+    },
+  });
+  expect(external.status()).toBe(200);
+  await a.getByLabel("A열 척도 최댓값").fill("2");
+  await page.getByRole("button", { name: "열 선택 저장", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "파일 내용 미리보기·열 선택" })
+      .getByRole("alert"),
+  ).toContainText("다른 화면");
+  await page
+    .getByRole("button", { name: "저장 상태 다시 불러오기", exact: true })
+    .click();
+  await expect(a.getByLabel("A열 척도 최댓값")).toHaveValue("4");
+  await expect(b.getByRole("checkbox").first()).not.toBeChecked();
+  await expect(panel.locator(".summary-results")).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "A · A", exact: true }).uncheck();
+  await expect(a).toHaveCount(0);
+});

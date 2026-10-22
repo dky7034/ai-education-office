@@ -1,10 +1,16 @@
 import { scanTable, PreviewError } from "./tabular.ts";
 import { numericAccumulator } from "./numericSummary.ts";
+import {
+  surveyAccumulator,
+  surveyQuestions,
+  type SurveyQuestion,
+} from "./survey.ts";
 export const FREQUENCY_LIMIT = 30;
 export interface SummaryInput {
   sheetId: string;
   headerRow: number;
   columns: number[];
+  questions?: SurveyQuestion[];
 }
 export function summarize(
   format: "csv" | "xlsx",
@@ -22,6 +28,9 @@ export function summarize(
     )
   )
     throw new PreviewError("저장된 열 선택을 확인해 주세요.");
+  const survey = surveyAccumulator(
+    surveyQuestions(selection.questions, indexes),
+  );
   const stats = indexes.map((index) => ({
     index,
     valueCount: 0,
@@ -47,6 +56,7 @@ export function summarize(
       );
       if (!active) return;
       includedRows++;
+      survey.add(values, flags);
       for (const stat of stats) {
         const value = (values[stat.index] ?? "").trim();
         if (flags.formulas.has(stat.index)) stat.formulaCount++;
@@ -74,6 +84,7 @@ export function summarize(
     totalRows,
     includedRows,
     excludedRows: totalRows - includedRows,
+    survey: survey.result(table.columns),
     columns: stats.map((stat) => {
       const all = [...stat.frequencies].sort(
         (a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0),

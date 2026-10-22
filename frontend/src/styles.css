@@ -2256,3 +2256,43 @@ h1 {
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
+
+.survey-settings {
+  margin: 16px 0;
+  border: 1px solid #dbe5df;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+.survey-question {
+  border-top: 1px solid #dbe5df;
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.survey-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+  align-items: center;
+}
+.survey-fields > label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.survey-fields input[type="number"] {
+  width: 100px;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid #b6cbbd;
+  border-radius: 5px;
+}
+.survey-results {
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid #b6cbbd;
+  border-radius: 8px;
+}

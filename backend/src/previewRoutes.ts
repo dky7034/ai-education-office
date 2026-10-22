@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { readXlsx, MAX_FILE_BYTES } from "./attachments.ts";
 import { summaryReport, REPORT_CSP } from "./summaryReport.ts";
 import { summaryCsv } from "./summaryCsv.ts";
+import { surveyQuestions } from "./survey.ts";
 import { summarize } from "./summary.ts";
 import { tablePreview, PreviewError } from "./tabular.ts";
 import { ConflictError, type Store, type Attachment } from "./store.ts";
@@ -113,7 +114,14 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
       !body ||
       Array.isArray(body) ||
       Object.keys(body).some(
-        (key) => !["sheetId", "headerRow", "columns", "revision"].includes(key),
+        (key) =>
+          ![
+            "sheetId",
+            "headerRow",
+            "columns",
+            "revision",
+            "questions",
+          ].includes(key),
       ) ||
       typeof body.sheetId !== "string" ||
       body.sheetId.length > 10 ||
@@ -168,6 +176,7 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
                 sheetId: body.sheetId,
                 headerRow: body.headerRow,
                 columns: body.columns,
+                questions: surveyQuestions(body.questions, body.columns),
               },
             ),
           });
