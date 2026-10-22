@@ -197,7 +197,7 @@ test("오피스 조회는 파일/결과 본문을 읽거나 DB를 쓰지 않고 
   assert.deepEqual(f.s.activityHead(f.a.user.id), cursor);
   await f.f.restart();
   assert.deepEqual(await f.view(), before);
-  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version, 9);
+  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version, 10);
   assert.equal(f.db.prepare("PRAGMA foreign_key_check").all().length, 0);
 });
 test("오피스 API의 로그인·계정 변경·쿼리 검증과 빈 현황을 확인한다", async (t) => {

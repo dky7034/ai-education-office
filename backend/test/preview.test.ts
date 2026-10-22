@@ -324,7 +324,7 @@ test("v3에서 첨부·계정·업무·이벤트를 보존하며 v8로 추가 �
       assert.equal(
         (db.prepare("PRAGMA user_version").get() as { user_version: number })
           .user_version,
-        9,
+        10,
       );
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
     } finally {

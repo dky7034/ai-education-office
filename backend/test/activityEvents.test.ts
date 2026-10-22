@@ -197,7 +197,7 @@ test("v8 기록을 보존해 v9 기준점을 만들고 실패한 마이그레이
   assert.equal(s.activityHead(account).sequence, 1);
   const db = new DatabaseSync(f.filename);
   t.after(() => db.close());
-  assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 9);
+  assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 10);
   assert.equal(db.prepare("PRAGMA quick_check").get()!.quick_check, "ok");
   assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
 });

@@ -1,3 +1,4 @@
+import type { AiConfig } from "../src/aiStore.ts";
 import { attachJobUpdates } from "../src/jobUpdates.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +17,7 @@ export const cookie = (response: Response) =>
 export async function fixture(
   options: {
     authRateLimit?: number;
+    aiConfig?: AiConfig;
     secureCookies?: boolean;
     liveIntervalMs?: number;
     seed?: (filename: string) => void;

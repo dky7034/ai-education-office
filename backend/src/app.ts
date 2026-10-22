@@ -1,3 +1,5 @@
+import { aiRoutes } from "./aiRoutes.ts";
+import type { AiConfig } from "./aiStore.ts";
 import { JOB_FILTERS, type JobFilter } from "./jobSearch.ts";
 import express, { type ErrorRequestHandler } from "express";
 import { existsSync } from "node:fs";
@@ -16,6 +18,7 @@ export function createApp(
     frontendDir?: string;
     secureCookies?: boolean;
     authRateLimit?: number;
+    aiConfig?: AiConfig;
   } = {},
 ) {
   const app = express();
@@ -70,6 +73,7 @@ export function createApp(
   app.use("/api/auth", auth.router);
   app.use("/api/jobs", auth.requireAccount);
   app.use("/api/jobs", attachmentRoutes(store, auth.requireAccount));
+  app.use("/api/jobs", aiRoutes(store, options.aiConfig));
   app.use("/api/jobs", runRoutes(store, auth.requireAccount));
   app.use("/api/jobs", previewRoutes(store, auth.requireAccount));
   app.get("/api/jobs/office", (req, res) => {

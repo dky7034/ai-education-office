@@ -1,3 +1,4 @@
+import { createAiQueue } from "./aiQueue.ts";
 import { attachJobUpdates } from "./jobUpdates.ts";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
@@ -14,6 +15,7 @@ const store = createStore(
   resolve(root, process.env.OFFICE_INPUT_DIR ?? "storage/input/jobs"),
   resolve(root, process.env.OFFICE_OUTPUT_DIR ?? "storage/output/runs"),
 );
+const aiQueue = createAiQueue(store); // Disabled dispatch; recovery and read/cancel APIs only.
 const app = createApp(store, {
   frontendDir: resolve(root, "frontend/dist"),
   secureCookies: process.env.NODE_ENV === "production",
@@ -21,6 +23,7 @@ const app = createApp(store, {
 const queue = createSummaryQueue(store);
 const server = app.listen(port, process.env.HOST ?? "127.0.0.1", () => {
   queue.start();
+  aiQueue.start();
   console.log(`교육운영 업무 서버 시작 · 포트 ${port} · AI 실행 미연결`);
 });
 const updates = attachJobUpdates(server, store);
@@ -29,6 +32,7 @@ async function stop() {
   if (stopping) return;
   stopping = true;
   updates.close();
+  await aiQueue.stop();
   await queue.stop();
   server.close(() => {
     store.close();

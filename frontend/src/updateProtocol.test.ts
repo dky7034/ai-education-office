@@ -22,6 +22,13 @@ const batch = {
   events: [event(1), event(2)],
 };
 describe("영구 변경 이벤트 프로토콜", () => {
+  it("AI 실행의 메타데이터 알림을 파일 없는 읽기 갱신으로 수락한다", () => {
+    const received = acceptUpdate(cursor, { ...batch, to: 1, head: 1, events: [
+      { ...event(1), runId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", state: "ai.cancelling", revision: null },
+    ] });
+    expect(received.changed).toBe(true);
+    expect(received.cursor.sequence).toBe(1);
+  });
   it("재연결 재생·겹친 전송·중복을 순서대로 수신하며 중복은 갱신하지 않는다", () => {
     const ready = acceptUpdate(cursor, {
       type: "ready",

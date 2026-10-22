@@ -1,3 +1,4 @@
+import { AI_SCHEMA, aiRepository } from "./aiStore.ts";
 import { officeRepository } from "./officeState.ts";
 import { ACTIVITY_SCHEMA, activityRepository } from "./activityEvents.ts";
 import { jobWhere, type JobSearch } from "./jobSearch.ts";
@@ -110,7 +111,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 9) {
+  if (version > 10) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -193,9 +194,14 @@ export function createStore(
       throw error;
     }
   }
+  if (version < 10) {
+    try { db.exec(AI_SCHEMA); }
+    catch (error) { if (db.isTransaction) db.exec("ROLLBACK"); db.close(); throw error; }
+  }
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
     ...runRepository(db),
+    ...aiRepository(db),
     ...reviewRepository(db),
     ...activityRepository(db),
     ...officeRepository(db),
