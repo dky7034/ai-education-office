@@ -13,7 +13,11 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       proxy: {
-        "/api": { target: "http://127.0.0.1:3001", changeOrigin: false },
+        "/api": {
+          target: "http://127.0.0.1:3001",
+          changeOrigin: false,
+          ws: true,
+        },
       },
     },
     define: { __STANDALONE__: JSON.stringify(standalone) },

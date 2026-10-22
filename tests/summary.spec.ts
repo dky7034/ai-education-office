@@ -722,6 +722,11 @@ test("백그라운드 집계 응답 유실 재시도·실제 워커 완료·저�
 test("실행 결과 승인·응답 유실 재시도·새로고침 보존·새 실행 반려와 충돌 복원", async ({
   page,
 }) => {
+  // Delay notifications to exercise HTTP retry/conflict even when a live update
+  // could otherwise resolve the state first. Live resolution is tested below.
+  await page.routeWebSocket("**/api/jobs/updates?*", (ws) => {
+    ws.connectToServer().onMessage(() => {});
+  });
   const { base } = await attach(
     page,
     "합성 검토.csv",
@@ -933,4 +938,98 @@ test("반려 사유·확인 체크 후 반려를 확정하고 보관 파일 변�
       await page.request.get(base + "/runs/" + runId + "/artifacts/csv")
     ).status(),
   ).toBe(409);
+});
+
+test("다른 화면의 검토 확정은 자동 반영하고 이전 자동 갱신은 검토 초안·결과를 유지한다", async ({
+  page,
+}) => {
+  const { base } = await attach(
+    page,
+    "합성 자동 검토.csv",
+    Buffer.from("A\n1\n3\n"),
+    [0],
+  );
+  const queue = page.getByRole("region", {
+    name: "백그라운드 집계 작업",
+    exact: true,
+  });
+  await queue
+    .getByRole("button", { name: "백그라운드 집계 접수", exact: true })
+    .click();
+  const row = queue.locator(".summary-run-list > li").first();
+  await expect(row.locator("strong")).toHaveText("완료");
+  await row
+    .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
+    .click();
+  const review = page.getByRole("region", { name: "결과물 검토", exact: true });
+  const comment = review.getByLabel("검토 의견 (선택)", { exact: true });
+  const confirm = review.getByLabel("이 실행 결과와 보관 파일을 확인했습니다", {
+    exact: true,
+  });
+  await comment.fill("입력 중인 합성 검토 의견");
+  await confirm.check();
+  const create = await page.request.post("/api/jobs", {
+    headers: {
+      "X-Office-Request": "1",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    data: {
+      kind: "notice",
+      title: "합성 갱신 계기",
+      instructions: "가상 업무",
+    },
+  });
+  expect(create.status()).toBe(201);
+  await expect(page.locator(".request-history > h3")).toHaveText(
+    "저장된 업무 2건",
+  );
+  await expect(comment).toHaveValue("입력 중인 합성 검토 의견");
+  await expect(confirm).toBeChecked();
+  const filter = page.getByRole("form", {
+    name: "업무 검색·상태 필터",
+    exact: true,
+  });
+  await filter
+    .getByLabel("집계·검토 상태", { exact: true })
+    .selectOption("review_pending");
+  await filter
+    .getByRole("button", { name: "검색·필터 적용", exact: true })
+    .click();
+  await expect(page.locator(".saved-job-list > li")).toHaveCount(1);
+  const runId = await row.getAttribute("data-run-id");
+  const state = await (
+    await page.request.get(base + "/runs/" + runId + "/review")
+  ).json();
+  expect(
+    (
+      await page.request.post(base + "/runs/" + runId + "/review", {
+        headers: {
+          "X-Office-Request": "1",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        data: {
+          targetHash: state.targetHash,
+          decision: "approved",
+          comment: "다른 화면에서 합성 확인",
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  await expect(review.locator(".review-decision strong")).toHaveText(
+    "승인 확정",
+  );
+  await expect(review.locator(".review-comment")).toContainText(
+    "다른 화면에서 합성 확인",
+  );
+  await expect(page.locator(".saved-job-list > li")).toHaveCount(0);
+  await expect(page.locator(".stored-row-counts dd")).toHaveText([
+    "2행",
+    "2행",
+    "0행",
+  ]);
+  await expect(
+    page.getByText("선택한 업무는 현재 표시된 목록 밖에 있습니다.", {
+      exact: false,
+    }),
+  ).toBeVisible();
 });

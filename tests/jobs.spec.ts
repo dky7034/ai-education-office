@@ -450,3 +450,80 @@ test("업무 검색·필터 URL 복원·서버 페이지·늦은 더 보기 응�
     ),
   ).toBe(true);
 });
+
+test("다른 화면 변경을 자동 반영하며 검색·더 보기·업무와 첨부 입력을 유지하고 재연결한다", async ({
+  page,
+}) => {
+  await registerViaApi(page);
+  const create = async (title: string) => {
+    const response = await page.request.post("/api/jobs", {
+      headers: {
+        "X-Office-Request": "1",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: { kind: "survey", title, instructions: "가상 갱신 검증" },
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()).job;
+  };
+  for (let i = 0; i < 23; i++) await create(`합성 자동갱신 ${i}`);
+  let disconnect = () => {};
+  await page.routeWebSocket("**/api/jobs/updates?*", (ws) => {
+    const server = ws.connectToServer();
+    disconnect = () =>
+      server.close({ code: 1012, reason: "Synthetic reconnect" });
+  });
+  await page.goto("/?q=" + encodeURIComponent("자동갱신") + "&status=none");
+  const live = page.getByRole("status", {
+    name: "업무 자동 갱신 상태",
+    exact: true,
+  });
+  await expect(live).toContainText("자동 갱신 연결됨");
+  await expect(live).toContainText("마지막 확인");
+  const rows = page.locator(".saved-job-list > li");
+  await page.getByRole("button", { name: "이력 더 보기", exact: true }).click();
+  await expect(rows).toHaveCount(23);
+  const detail = page.getByRole("region", {
+    name: "선택한 업무 상세",
+    exact: true,
+  });
+  const selectedTitle = await detail.locator("h3").first().textContent();
+  await page.getByLabel(/업무 제목/).fill("작성 중인 합성 제목");
+  await page.getByLabel(/요청 내용/).fill("작성 중인 합성 요청");
+  const file = detail.getByLabel("첨부할 파일", { exact: true });
+  await file.setInputFiles({
+    name: "합성 대기.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("A\n1\n"),
+  });
+  const search = page.getByRole("form", {
+    name: "업무 검색·상태 필터",
+    exact: true,
+  });
+  await search
+    .getByLabel("업무 검색", { exact: true })
+    .fill("미적용 검색 초안");
+  await create("합성 자동갱신 외부 접수");
+  await expect(page.locator(".request-history > h3")).toHaveText(
+    "검색·필터 결과 24건",
+  );
+  await expect(rows).toHaveCount(24);
+  await expect(rows.first()).toContainText("외부 접수");
+  await expect(detail.locator("h3").first()).toHaveText(selectedTitle!);
+  disconnect();
+  const missed = await create("합성 자동갱신 연결 복구");
+  await expect(page.locator(".request-history > h3")).toHaveText(
+    "검색·필터 결과 25건",
+  );
+  await expect(live).toContainText("자동 갱신 연결됨");
+  await expect(rows.first()).toHaveAttribute("data-job-id", missed.id);
+  await expect(rows).toHaveCount(25);
+  await expect(page.getByLabel(/업무 제목/)).toHaveValue("작성 중인 합성 제목");
+  await expect(page.getByLabel(/요청 내용/)).toHaveValue("작성 중인 합성 요청");
+  await expect(file).toHaveValue(/합성 대기\.csv$/);
+  await expect(search.getByLabel("업무 검색", { exact: true })).toHaveValue(
+    "미적용 검색 초안",
+  );
+  expect(new URL(page.url()).searchParams.get("q")).toBe("자동갱신");
+  expect(new URL(page.url()).searchParams.get("status")).toBe("none");
+});

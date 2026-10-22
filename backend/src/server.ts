@@ -1,3 +1,4 @@
+import { attachJobUpdates } from "./jobUpdates.ts";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { createSummaryQueue } from "./summaryQueue.ts";
@@ -22,10 +23,12 @@ const server = app.listen(port, process.env.HOST ?? "127.0.0.1", () => {
   queue.start();
   console.log(`교육운영 업무 서버 시작 · 포트 ${port} · AI 실행 미연결`);
 });
+const updates = attachJobUpdates(server, store);
 let stopping = false;
 async function stop() {
   if (stopping) return;
   stopping = true;
+  updates.close();
   await queue.stop();
   server.close(() => {
     store.close();

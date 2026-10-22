@@ -186,6 +186,21 @@ export function createStore(
   return {
     ...runRepository(db),
     ...reviewRepository(db),
+    // Append-only metadata only; never read result JSON, credentials or files.
+    activityRevision(account: string) {
+      const row = db
+        .prepare(
+          `SELECT
+        (SELECT count(*) FROM jobs WHERE account_id=?) AS jobs,
+        (SELECT count(*) FROM attachments a JOIN jobs j ON j.id=a.job_id WHERE j.account_id=?) AS files,
+        (SELECT coalesce(sum(s.revision),0) FROM column_selections s JOIN attachments a ON a.id=s.file_id JOIN jobs j ON j.id=a.job_id WHERE j.account_id=?) AS selections,
+        (SELECT coalesce(max(e.id),0) FROM summary_run_events e JOIN summary_runs r ON r.id=e.run_id WHERE r.account_id=?) AS runs,
+        (SELECT count(*) FROM summary_run_reviews WHERE account_id=?) AS reviews
+      `,
+        )
+        .get(account, account, account, account, account);
+      return createHash("sha256").update(JSON.stringify(row)).digest("hex");
+    },
     outputRoot,
     selection(
       account: string,

@@ -1,5 +1,6 @@
+import { JobUpdateRevision } from "./jobUpdates";
 import RunReview from "./RunReview";
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { jobsApi, ApiError } from "./jobsApi";
 import type { Summary } from "./FileSummary";
 import SurveyResults from "./SurveyResults";
@@ -51,6 +52,7 @@ export default function BackgroundSummary({
   initialRunId?: string;
   historyOnly?: boolean;
 }) {
+  const liveRevision = useContext(JobUpdateRevision);
   const [data, setData] = useState<RunPage | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -131,7 +133,7 @@ export default function BackgroundSummary({
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [base, accountId, offset, version]);
+  }, [base, accountId, offset, version, liveRevision]);
   async function enqueue() {
     if (busy || !canSubmit || revision === null) return;
     setBusy(true);

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useId } from "react";
+import { JobUpdateRevision } from "./jobUpdates";
+import { useContext, useEffect, useRef, useState, useId } from "react";
 import { jobsApi, ApiError } from "./jobsApi";
 interface ReviewState {
   targetHash: string;
@@ -27,6 +28,7 @@ export default function RunReview({
   onUnauthorized: () => void;
   onActivityChange?: () => void;
 }) {
+  const liveRevision = useContext(JobUpdateRevision);
   const [state, setState] = useState<ReviewState | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -51,12 +53,16 @@ export default function RunReview({
       e instanceof Error ? e.message : "검토 상태를 확인하지 못했습니다.",
     );
   }
-  async function load(signal: AbortSignal) {
+  const fingerprint = useRef("");
+  const handledRevision = useRef(liveRevision);
+  const loadSequence = useRef(0);
+  async function load(signal: AbortSignal, automatic = false) {
+    const sequence = ++loadSequence.current;
     const data = await jobsApi<ReviewState>(base + "/review", {
       headers,
       signal,
     });
-    if (!signal.aborted) {
+    if (!signal.aborted && sequence === loadSequence.current) {
       setState(
         data.targetHash === expectedTargetHash
           ? data
@@ -70,7 +76,14 @@ export default function RunReview({
                 : null,
             },
       );
-      setConfirmed(false);
+      const next = JSON.stringify([
+        data.targetHash,
+        data.reviewable,
+        data.problem,
+        data.decision,
+      ]);
+      if (!automatic || fingerprint.current !== next) setConfirmed(false);
+      fingerprint.current = next;
     }
   }
   useEffect(() => {
@@ -79,6 +92,20 @@ export default function RunReview({
     void load(current.signal).catch(fail);
     return () => current.abort();
   }, [base, accountId, expectedTargetHash]);
+  useEffect(() => {
+    if (!liveRevision || busy || handledRevision.current === liveRevision)
+      return;
+    handledRevision.current = liveRevision;
+    const current = new AbortController();
+    const timer = setTimeout(() => current.abort(), 10000);
+    void load(current.signal, true).catch((e) => {
+      if (!current.signal.aborted) fail(e);
+    });
+    return () => {
+      current.abort();
+      clearTimeout(timer);
+    };
+  }, [liveRevision, busy, base, accountId, expectedTargetHash]);
   async function refresh() {
     if (busy || !controller.current) return;
     setBusy(true);

@@ -1,3 +1,4 @@
+import { attachJobUpdates } from "../src/jobUpdates.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,7 @@ export async function fixture(
   options: {
     authRateLimit?: number;
     secureCookies?: boolean;
+    liveIntervalMs?: number;
     seed?: (filename: string) => void;
   } = {},
 ) {
@@ -24,6 +26,7 @@ export async function fixture(
   options.seed?.(filename);
   let store = createStore(filename);
   let server = createApp(store, options).listen(0, "127.0.0.1");
+  let updates = attachJobUpdates(server, store, options.liveIntervalMs);
   await once(server, "listening");
   const url = () =>
     `http://127.0.0.1:${(server.address() as { port: number }).port}`;
@@ -80,6 +83,7 @@ export async function fixture(
       body: JSON.stringify(body),
     });
   const close = async () => {
+    updates.close();
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
@@ -87,6 +91,7 @@ export async function fixture(
   };
   return {
     filename,
+    url,
     postJson(
       path: string,
       body: unknown,
@@ -151,6 +156,7 @@ export async function fixture(
       await close();
       store = createStore(filename);
       server = createApp(store, options).listen(0, "127.0.0.1");
+      updates = attachJobUpdates(server, store, options.liveIntervalMs);
       await once(server, "listening");
     },
     async cleanup() {

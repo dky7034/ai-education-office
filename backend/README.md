@@ -65,7 +65,7 @@ POST 본문 예시:
 
 설치·빌드·서버 시작 시 DB나 업무를 초기화하지 않습니다. DB·WAL·SHM은 Git에서 제외합니다. 복사는 서버를 정상 종료한 뒤 진행하세요. 온라인 백업·보존 기간·삭제 API는 후속 단계입니다. 테스트는 임시 DB 또는 `database/e2e.sqlite`를 사용해 기본 DB와 분리합니다.
 
-AI 자동 분석, 수정·삭제, 조직 결재선, AI 실행 큐, WebSocket, 실제 AI·Python 처리는 아직 없습니다.
+AI 자동 분석, 수정·삭제, 조직 결재선, AI 실행 큐, 개별 이벤트 영구 재생, 실제 AI·Python 처리는 아직 없습니다.
 
 XLSX/CSV 첨부·다운로드는 [첨부 안내](../docs/ATTACHMENTS.md)에 정리했습니다. v3는 기존 업무·계정을 보존하고 attachments 테이블을 추가합니다.
 
@@ -90,3 +90,5 @@ v8은 summary_run_reviews를 추가합니다. 실행별 승인·반려·대상 �
 업무 목록/상세의 `job.activity`는 첨부별 최근 실행·검토 기록과 전체 대기/실행 건수를 반환합니다. 파일 무결성은 읽지 않으며 스키마 v8을 유지합니다. 범위·정렬·응답은 [업무 현황 안내](../docs/JOB_ACTIVITY.md)를 따릅니다.
 
 `GET /api/jobs`는 `q`와 `status`를 페이지 조회 전에 적용하고 정규화한 `filters`를 반환합니다. 허용 상태·100자 검색·총건수·잘못된 쿼리 처리 기준은 [업무 검색 안내](../docs/JOB_SEARCH.md)를 따릅니다. 스키마 v8을 유지합니다.
+
+계정별 읽기 전용 WebSocket `/api/jobs/updates?account=<UUID>`의 권한·Origin·연결 제한·종료와 스냅샷 복구 계약은 [업무 자동 갱신 안내](../docs/JOB_UPDATES.md)를 따릅니다.

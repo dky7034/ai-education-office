@@ -19,13 +19,20 @@ const authCookie = "office_auth",
 const lifetime = 7 * 24 * 60 * 60 * 1000;
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
-function cookieId(req: Request, name: string) {
+function cookieId(req: { headers: { cookie?: string } }, name: string) {
   const value = (req.headers.cookie ?? "")
     .split(";")
     .map((p) => p.trim())
     .find((p) => p.startsWith(name + "="))
     ?.slice(name.length + 1);
   return value && /^[a-f0-9]{64}$/.test(value) ? hash(value) : null;
+}
+export function sessionAccount(
+  store: Store,
+  req: { headers: { cookie?: string } },
+) {
+  const id = cookieId(req, authCookie);
+  return id ? store.authSession(id) : null;
 }
 const userName = (value: unknown) =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -95,8 +102,7 @@ export function accountAuth(store: Store, secureCookies = false, limit = 30) {
     return cookieId(req, legacyCookie);
   }
   function current(req: Request) {
-    const id = cookieId(req, authCookie);
-    return id ? store.authSession(id) : null;
+    return sessionAccount(store, req);
   }
   function requireAccount(req: Request, res: Response, next: NextFunction) {
     const user = current(req);

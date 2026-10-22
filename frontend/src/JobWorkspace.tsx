@@ -1,3 +1,4 @@
+import { JobUpdateRevision, useJobUpdates } from "./jobUpdates";
 import JobActivity from "./JobActivity";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowRight, ClipboardList, Plus, RefreshCw } from "lucide-react";
@@ -101,6 +102,12 @@ export default function JobWorkspace({
   const counter = useRef(0);
   const generation = useRef(0);
 
+  const live = useJobUpdates(accountId);
+  const [syncing, setSyncing] = useState(false);
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+
   useEffect(() => {
     const abort = new AbortController();
     generation.current++;
@@ -165,6 +172,80 @@ export default function JobWorkspace({
       });
     return () => abort.abort();
   }, [activityVersion, selected, connected, accountId]);
+
+  // Keep visible page depth and component identity during background reads.
+  useEffect(() => {
+    if (!live.tick || loading || moreLoading) return;
+    const abort = new AbortController();
+    const current = ++generation.current;
+    const signal = AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]);
+    setSyncing(true);
+    const run = async () => {
+      try {
+        const wanted = Math.max(20, jobsRef.current.length);
+        let result: JobPage;
+        const all: SavedJob[] = [];
+        let offset = 0;
+        do {
+          result = await accountApi<JobPage>(jobListPath(filters, offset), {
+            signal,
+          });
+          all.push(
+            ...result.jobs.filter(
+              (job) => !all.some((old) => old.id === job.id),
+            ),
+          );
+          offset += result.jobs.length;
+        } while (result.page.hasMore && offset < wanted && result.jobs.length);
+        if (abort.signal.aborted || current !== generation.current) return;
+        setJobs(all);
+        setPage({
+          ...result.page,
+          offset: 0,
+          limit: all.length,
+          hasMore: all.length < result.page.total,
+        });
+        setLoadedFilters(filters);
+        setConnected(true);
+        setSelected((id) => id ?? all[0]?.id ?? null);
+        setError("");
+        setSyncedAt(new Date().toISOString());
+        if (selected) {
+          try {
+            const latest = await accountApi<JobDetail>(
+              `/${encodeURIComponent(selected)}`,
+              { signal },
+            );
+            if (!abort.signal.aborted && current === generation.current) {
+              setDetail(latest);
+              setDetailError("");
+            }
+          } catch (e) {
+            if (!abort.signal.aborted && current === generation.current)
+              setDetailError(message(e));
+          }
+        }
+      } catch (e) {
+        if (!abort.signal.aborted && current === generation.current)
+          setError(message(e));
+      } finally {
+        if (!abort.signal.aborted) setSyncing(false);
+      }
+    };
+    void run();
+    return () => {
+      abort.abort();
+    };
+  }, [
+    live.tick,
+    filters,
+    loading,
+    moreLoading,
+    selected,
+    version,
+    refreshKey,
+    activityVersion,
+  ]);
 
   function applyFilters(next: JobSearch) {
     generation.current++;
@@ -238,7 +319,7 @@ export default function JobWorkspace({
     }
   }
   async function more() {
-    if (!page || moreLoading || loading || !listMatches) return;
+    if (!page || moreLoading || loading || syncing || !listMatches) return;
     const current = generation.current;
     setMoreLoading(true);
     setError("");
@@ -284,6 +365,21 @@ export default function JobWorkspace({
           이력 새로고침
         </button>
       </div>
+      <p
+        className="session-note"
+        role="status"
+        aria-label="업무 자동 갱신 상태"
+      >
+        {live.status} ·{" "}
+        {syncing
+          ? "최신 상태 확인 중"
+          : syncedAt
+            ? `마지막 확인 ${date(syncedAt)}`
+            : "최신 상태 확인 대기"}
+        <button className="text-button" onClick={live.reconnect}>
+          자동 갱신 다시 연결
+        </button>
+      </p>
       <div className="request-disclaimer">
         <strong>접수·보관 단계</strong>
         <span>
@@ -500,7 +596,7 @@ export default function JobWorkspace({
           {listMatches && page?.hasMore && (
             <button
               className="secondary-button more-jobs"
-              disabled={loading || moreLoading}
+              disabled={loading || moreLoading || syncing}
               onClick={more}
             >
               {moreLoading ? "불러오는 중…" : "이력 더 보기"}
@@ -572,14 +668,16 @@ export default function JobWorkspace({
                       }
                     />
                   </section>
-                  <Attachments
-                    key={detail.job.id}
-                    target={target}
-                    onActivityChange={() => setActivityVersion((v) => v + 1)}
-                    jobId={detail.job.id}
-                    accountId={accountId}
-                    onUnauthorized={onUnauthorized}
-                  />
+                  <JobUpdateRevision.Provider value={live.revision}>
+                    <Attachments
+                      key={detail.job.id}
+                      target={target}
+                      onActivityChange={() => setActivityVersion((v) => v + 1)}
+                      jobId={detail.job.id}
+                      accountId={accountId}
+                      onUnauthorized={onUnauthorized}
+                    />
+                  </JobUpdateRevision.Provider>
                   <h4>저장 이벤트</h4>
                   <ol className="saved-events">
                     {detail.events.map((event) => (
