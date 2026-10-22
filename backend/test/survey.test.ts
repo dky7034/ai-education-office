@@ -1,3 +1,4 @@
+import { dropActivitySchema } from "./migrationHelpers.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -292,6 +293,7 @@ test("v4 선택·원본·업무·계정·이력을 보존하고 v5 설문 기본
       });
       store.close();
       const db = new DatabaseSync(filename);
+      dropActivitySchema(db);
       db.exec(
         "DROP TABLE summary_run_reviews; DROP TABLE summary_run_artifacts; DROP TABLE summary_run_events; DROP TABLE summary_runs; DROP TABLE summary_queue_lease; ALTER TABLE column_selections DROP COLUMN questions_json; PRAGMA user_version=4;",
       );
@@ -315,7 +317,7 @@ test("v4 선택·원본·업무·계정·이력을 보존하고 v5 설문 기본
       assert.equal(
         (db.prepare("PRAGMA user_version").get() as { user_version: number })
           .user_version,
-        8,
+        9,
       );
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
       assert.equal(

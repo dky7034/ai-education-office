@@ -1,3 +1,9 @@
+import {
+  acceptUpdate,
+  parseCursor,
+  cursorText,
+  type UpdateCursor,
+} from "./updateProtocol";
 import { createContext, useEffect, useRef, useState } from "react";
 
 export const JobUpdateRevision = createContext("");
@@ -13,6 +19,13 @@ export function useJobUpdates(accountId: string) {
       watchdog: ReturnType<typeof setTimeout> | undefined,
       attempts = 0,
       epoch = 0;
+    const storageKey = `office:updates:v1:${accountId}`;
+    let cursor: UpdateCursor | null = null;
+    try {
+      cursor = parseCursor(sessionStorage.getItem(storageKey));
+    } catch {
+      /* Storage may be unavailable. */
+    }
     const clear = () => {
       clearTimeout(timer);
       clearTimeout(watchdog);
@@ -38,9 +51,11 @@ export function useJobUpdates(accountId: string) {
       const url = new URL("/api/jobs/updates", location.href);
       url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
       url.searchParams.set("account", accountId);
+      if (cursor) url.searchParams.set("cursor", cursorText(cursor));
       const current = new WebSocket(url);
       socket = current;
       const connection = ++epoch;
+      let initialized = false;
       const watch = () => {
         clearTimeout(watchdog);
         watchdog = setTimeout(() => current.close(), 35000);
@@ -50,13 +65,25 @@ export function useJobUpdates(accountId: string) {
         if (stopped || socket !== current) return;
         try {
           const data = JSON.parse(String(event.data));
-          if (data.type !== "snapshot" || !/^[a-f0-9]{64}$/.test(data.revision))
-            return;
+          if (!initialized && data?.type !== "ready")
+            throw new Error("Missing ready");
+          const update = acceptUpdate(cursor, data);
+          initialized = true;
+          cursor = update.cursor;
+          try {
+            sessionStorage.setItem(storageKey, cursorText(cursor));
+          } catch {
+            /* Keep the in-memory cursor. */
+          }
           attempts = 0;
           watch();
-          setStatus("자동 갱신 연결됨");
-          setRevision(`${connection}:${data.revision}`);
-          setTick((v) => v + 1);
+          setStatus(
+            update.replaying ? "누락 변경 복구 중" : "자동 갱신 연결됨",
+          );
+          if (update.changed)
+            setRevision(`${connection}:${cursorText(cursor)}`);
+          if (update.changed || data.type === "heartbeat")
+            setTick((v) => v + 1);
         } catch {
           current.close();
         }

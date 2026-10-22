@@ -1,3 +1,4 @@
+import { dropActivitySchema } from "./migrationHelpers.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -249,6 +250,7 @@ test("v6 완료 기록은 v7 마이그레이션 뒤 결과를 유지하며 파�
     db.prepare(
       "UPDATE summary_runs SET status='completed',result_json=?,finished_at=? WHERE id=?",
     ).run(JSON.stringify(summary), summary.calculatedAt, run.id);
+    dropActivitySchema(db);
     db.exec("DROP TABLE summary_run_reviews; DROP TABLE summary_run_artifacts; PRAGMA user_version=6;");
     db.close();
     await f.restart();
@@ -264,7 +266,7 @@ test("v6 완료 기록은 v7 마이그레이션 뒤 결과를 유지하며 파�
     );
     assert.equal(existsSync(join(store.outputRoot, run.id)), false);
     const check = new DatabaseSync(f.filename);
-    assert.equal(check.prepare("PRAGMA user_version").get()!.user_version, 8);
+    assert.equal(check.prepare("PRAGMA user_version").get()!.user_version, 9);
     assert.equal(check.prepare("PRAGMA foreign_key_check").all().length, 0);
     check.close();
   } finally {

@@ -1,3 +1,4 @@
+import { dropActivitySchema } from "./migrationHelpers.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout as wait } from "node:timers/promises";
@@ -357,6 +358,7 @@ test("v5 데이터·설정·원본을 보존하며 v6 실행 테이블을 추가
       s.saveSelection(account, jobId, fileId, 0, selection);
       s.close();
       const db = new DatabaseSync(filename);
+      dropActivitySchema(db);
       db.exec(
         "DROP TABLE summary_run_reviews; DROP TABLE summary_run_artifacts; DROP TABLE summary_run_events; DROP TABLE summary_runs; DROP TABLE summary_queue_lease; PRAGMA user_version=5;",
       );
@@ -381,7 +383,7 @@ test("v5 데이터·설정·원본을 보존하며 v6 실행 테이블을 추가
     }
     const db = new DatabaseSync(f.filename, { readOnly: true });
     try {
-      assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 8);
+      assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 9);
       assert.equal(db.prepare("PRAGMA quick_check").get()!.quick_check, "ok");
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
     } finally {

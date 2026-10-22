@@ -1,3 +1,4 @@
+import { ACTIVITY_SCHEMA, activityRepository } from "./activityEvents.ts";
 import { jobWhere, type JobSearch } from "./jobSearch.ts";
 import { jobActivities } from "./jobActivity.ts";
 import { REVIEW_SCHEMA, reviewRepository } from "./reviewStore.ts";
@@ -108,7 +109,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 8) {
+  if (version > 9) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -182,25 +183,20 @@ export function createStore(
   if (version < 6) db.exec(RUN_SCHEMA);
   if (version < 7) db.exec(ARTIFACT_SCHEMA);
   if (version < 8) db.exec(REVIEW_SCHEMA);
+  if (version < 9) {
+    try {
+      db.exec(ACTIVITY_SCHEMA);
+    } catch (error) {
+      if (db.isTransaction) db.exec("ROLLBACK");
+      db.close();
+      throw error;
+    }
+  }
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
     ...runRepository(db),
     ...reviewRepository(db),
-    // Append-only metadata only; never read result JSON, credentials or files.
-    activityRevision(account: string) {
-      const row = db
-        .prepare(
-          `SELECT
-        (SELECT count(*) FROM jobs WHERE account_id=?) AS jobs,
-        (SELECT count(*) FROM attachments a JOIN jobs j ON j.id=a.job_id WHERE j.account_id=?) AS files,
-        (SELECT coalesce(sum(s.revision),0) FROM column_selections s JOIN attachments a ON a.id=s.file_id JOIN jobs j ON j.id=a.job_id WHERE j.account_id=?) AS selections,
-        (SELECT coalesce(max(e.id),0) FROM summary_run_events e JOIN summary_runs r ON r.id=e.run_id WHERE r.account_id=?) AS runs,
-        (SELECT count(*) FROM summary_run_reviews WHERE account_id=?) AS reviews
-      `,
-        )
-        .get(account, account, account, account, account);
-      return createHash("sha256").update(JSON.stringify(row)).digest("hex");
-    },
+    ...activityRepository(db),
     outputRoot,
     selection(
       account: string,

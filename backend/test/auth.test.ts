@@ -361,7 +361,7 @@ test("v1 업무·이벤트를 보존하고 기존 쿠키 증명으로만 계정�
     assert.equal(
       (db.prepare("PRAGMA user_version").get() as { user_version: number })
         .user_version,
-      8,
+      9,
     );
     db.close();
   } finally {

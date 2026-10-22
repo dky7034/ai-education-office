@@ -470,8 +470,10 @@ test("다른 화면 변경을 자동 반영하며 검색·더 보기·업무와 
   let disconnect = () => {};
   await page.routeWebSocket("**/api/jobs/updates?*", (ws) => {
     const server = ws.connectToServer();
-    disconnect = () =>
-      server.close({ code: 1012, reason: "Synthetic reconnect" });
+    disconnect = () => {
+      void server.close({ code: 1012, reason: "Synthetic reconnect" });
+      void ws.close({ code: 1012, reason: "Synthetic reconnect" });
+    };
   });
   await page.goto("/?q=" + encodeURIComponent("자동갱신") + "&status=none");
   const live = page.getByRole("status", {
@@ -526,4 +528,83 @@ test("다른 화면 변경을 자동 반영하며 검색·더 보기·업무와 
   );
   expect(new URL(page.url()).searchParams.get("q")).toBe("자동갱신");
   expect(new URL(page.url()).searchParams.get("status")).toBe("none");
+});
+
+test("놓친 변경을 마지막 커서부터 재생하고 탭 새로고침에서도 커서를 복원한다", async ({
+  page,
+}) => {
+  await registerViaApi(page);
+  const create = async (title: string) => {
+    const response = await page.request.post("/api/jobs", {
+      headers: {
+        "X-Office-Request": "1",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: { kind: "survey", title, instructions: "가상 이벤트 복구" },
+    });
+    expect(response.status()).toBe(201);
+    return (await response.json()).job;
+  };
+  await create("합성 커서 기준 업무");
+  const urls: string[] = [],
+    ready: { cursor: string; reset: boolean }[] = [],
+    replayed: number[] = [];
+  let drop = false,
+    dropped = 0;
+  await page.routeWebSocket("**/api/jobs/updates?*", (ws) => {
+    urls.push(ws.url());
+    const server = ws.connectToServer();
+    server.onMessage((message) => {
+      const data = JSON.parse(String(message));
+      if (data.type === "ready") ready.push(data);
+      if (data.type === "events") {
+        if (drop) {
+          drop = false;
+          dropped = data.to;
+          void server.close({ code: 1012, reason: "Synthetic missed event" });
+          void ws.close({ code: 1012, reason: "Synthetic missed event" });
+          return;
+        }
+        replayed.push(
+          ...data.events.map((e: { sequence: number }) => e.sequence),
+        );
+      }
+      ws.send(message);
+    });
+  });
+  await page.goto("/");
+  const live = page.getByRole("status", {
+    name: "업무 자동 갱신 상태",
+    exact: true,
+  });
+  await expect(live).toContainText("자동 갱신 연결됨");
+  await expect(live).toContainText("마지막 확인");
+  const first = ready[0]!.cursor;
+  await page.getByLabel(/업무 제목/).fill("복구 중 유지할 합성 입력");
+  drop = true;
+  const missed = await create("합성 누락 이벤트 업무");
+  await expect.poll(() => replayed.includes(dropped) && dropped > 0).toBe(true);
+  await expect(
+    page.locator(`.saved-job-list > li[data-job-id="${missed.id}"]`),
+  ).toBeVisible();
+  await expect(page.getByLabel(/업무 제목/)).toHaveValue(
+    "복구 중 유지할 합성 입력",
+  );
+  expect(
+    urls.some((url) => new URL(url).searchParams.get("cursor") === first),
+  ).toBe(true);
+  const finalCursor = first.replace(/:[0-9]+$/, ":" + dropped);
+  const connections = urls.length;
+  await page.reload();
+  await expect(live).toContainText("자동 갱신 연결됨");
+  await expect(page.locator(".saved-job-list > li")).toHaveCount(2);
+  expect(
+    urls
+      .slice(connections)
+      .some((url) => new URL(url).searchParams.get("cursor") === finalCursor),
+  ).toBe(true);
+  expect(ready.at(-1)!.reset).toBe(false);
+  expect((await (await page.request.get("/api/jobs")).json()).page.total).toBe(
+    2,
+  );
 });

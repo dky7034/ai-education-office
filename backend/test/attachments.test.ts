@@ -1,3 +1,4 @@
+import { dropActivitySchema } from "./migrationHelpers.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -290,6 +291,7 @@ test("v2 계정·업무·이벤트를 v3 첨부 테이블 추가 후에도 보�
       jobId = result.job.id;
       store.close();
       const db = new DatabaseSync(filename);
+      dropActivitySchema(db);
       db.exec(
         "DROP TABLE summary_run_reviews; DROP TABLE summary_run_artifacts; DROP TABLE summary_run_events; DROP TABLE summary_runs; DROP TABLE summary_queue_lease; DROP TABLE column_selections; DROP TABLE attachments; PRAGMA user_version=2;",
       );
@@ -310,7 +312,7 @@ test("v2 계정·업무·이벤트를 v3 첨부 테이블 추가 후에도 보�
       assert.equal(
         (db.prepare("PRAGMA user_version").get() as { user_version: number })
           .user_version,
-        8,
+        9,
       );
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
     } finally {

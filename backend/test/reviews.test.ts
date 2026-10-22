@@ -1,3 +1,4 @@
+import { dropActivitySchema } from "./migrationHelpers.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
@@ -370,6 +371,7 @@ test("v7 완료 요약·파일은 v8 마이그레이션 후 보존되고 검토 
       ).json();
     await t.queue.stop();
     const db = new DatabaseSync(t.f.filename);
+    dropActivitySchema(db);
     db.exec("DROP TABLE summary_run_reviews; PRAGMA user_version=7;");
     db.close();
     await t.f.restart();
@@ -383,7 +385,7 @@ test("v7 완료 요약·파일은 v8 마이그레이션 후 보존되고 검토 
     assert.equal(state.reviewable, true);
     assert.equal(state.decision, null);
     const check = new DatabaseSync(t.f.filename);
-    assert.equal(check.prepare("PRAGMA user_version").get()!.user_version, 8);
+    assert.equal(check.prepare("PRAGMA user_version").get()!.user_version, 9);
     assert.equal(check.prepare("PRAGMA quick_check").get()!.quick_check, "ok");
     assert.equal(check.prepare("PRAGMA foreign_key_check").all().length, 0);
     check.close();
