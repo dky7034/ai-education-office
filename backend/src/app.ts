@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler } from "express";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ASSIGNEES, ConflictError, type Kind, type Store } from "./store.ts";
+import { runRoutes } from "./runRoutes.ts";
 import { previewRoutes } from "./previewRoutes.ts";
 import { attachmentRoutes } from "./attachments.ts";
 import { accountAuth } from "./auth.ts";
@@ -68,6 +69,7 @@ export function createApp(
   app.use("/api/auth", auth.router);
   app.use("/api/jobs", auth.requireAccount);
   app.use("/api/jobs", attachmentRoutes(store, auth.requireAccount));
+  app.use("/api/jobs", runRoutes(store));
   app.use("/api/jobs", previewRoutes(store, auth.requireAccount));
   app.get("/api/jobs", (req, res) => {
     const limit = req.query.limit === undefined ? 20 : Number(req.query.limit);

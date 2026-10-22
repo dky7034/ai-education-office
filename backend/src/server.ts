@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
+import { createSummaryQueue } from "./summaryQueue.ts";
 import { createApp } from "./app.ts";
 import { createStore } from "./store.ts";
 
@@ -15,13 +16,16 @@ const app = createApp(store, {
   frontendDir: resolve(root, "frontend/dist"),
   secureCookies: process.env.NODE_ENV === "production",
 });
-const server = app.listen(port, process.env.HOST ?? "127.0.0.1", () =>
-  console.log(`교육운영 업무 서버 시작 · 포트 ${port} · AI 실행 미연결`),
-);
+const queue = createSummaryQueue(store);
+const server = app.listen(port, process.env.HOST ?? "127.0.0.1", () => {
+  queue.start();
+  console.log(`교육운영 업무 서버 시작 · 포트 ${port} · AI 실행 미연결`);
+});
 let stopping = false;
-function stop() {
+async function stop() {
   if (stopping) return;
   stopping = true;
+  await queue.stop();
   server.close(() => {
     store.close();
     process.exit(0);

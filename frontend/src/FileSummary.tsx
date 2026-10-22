@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import SurveyResults, { type SurveyResult } from "./SurveyResults";
 import { jobsApi, ApiError } from "./jobsApi";
-interface Summary {
+export interface Summary {
   survey: SurveyResult | null;
   revision: number;
   sourceHash: string;

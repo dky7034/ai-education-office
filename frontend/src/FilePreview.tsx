@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import SurveySettings, { type QuestionDraft } from "./SurveySettings";
+import BackgroundSummary from "./BackgroundSummary";
 import FileSummary from "./FileSummary";
 import { ApiError, jobsApi } from "./jobsApi";
 interface Selection {
@@ -329,6 +330,19 @@ export default function FilePreview({
               다시 불러오기는 현재 선택을 초기화합니다.
             </p>
           )}
+          <BackgroundSummary
+            jobId={jobId}
+            fileId={fileId}
+            accountId={accountId}
+            revision={result.selection?.revision ?? null}
+            canSubmit={
+              !!result.selection &&
+              !dirty &&
+              result.selection.sheetId === result.preview.sheetId &&
+              result.selection.headerRow === result.preview.headerRow
+            }
+            onUnauthorized={onUnauthorized}
+          />
           {result.selection &&
           !dirty &&
           result.selection.sheetId === result.preview.sheetId &&

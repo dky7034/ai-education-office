@@ -597,3 +597,78 @@ test("분석 XLSX 다운로드·전체 빈도/긴 값·설문/숫자 일치·실
   await expect(panel.getByRole("alert")).toContainText("다른 화면");
   await expect(panel.locator(".summary-results")).toHaveCount(0);
 });
+
+test("백그라운드 집계 응답 유실 재시도·실제 워커 완료·저장 결과·새로고침 복원", async ({
+  page,
+}) => {
+  const { base } = await attach(
+    page,
+    "합성 큐.csv",
+    Buffer.from("A,B\n1,0.1\n5,0.2\n6,문자\n,\n"),
+    [0, 1],
+  );
+  const queue = page.getByRole("region", {
+    name: "백그라운드 집계 작업",
+    exact: true,
+  });
+  const button = queue.getByRole("button", {
+    name: "백그라운드 집계 접수",
+    exact: true,
+  });
+  await expect(button).toBeEnabled();
+  let lose = true;
+  await page.route("**" + base + "/runs", async (route) => {
+    if (route.request().method() === "POST" && lose) {
+      lose = false;
+      const result = await route.fetch();
+      expect(result.status()).toBe(202);
+      await route.abort();
+    } else await route.continue();
+  });
+  await button.click();
+  await expect(queue.getByRole("alert")).toContainText("연결");
+  await button.click();
+  await expect(queue.locator(".summary-run-list > li")).toHaveCount(1);
+  await expect(queue.locator(".summary-run-list > li").first()).toContainText(
+    "완료",
+  );
+  await queue
+    .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
+    .click();
+  const stored = queue.getByRole("region", {
+    name: "저장된 백그라운드 집계 결과",
+    exact: true,
+  });
+  await expect(stored.locator(".stored-row-counts dd")).toHaveText([
+    "4행",
+    "3행",
+    "1행",
+  ]);
+  await stored
+    .locator("details")
+    .filter({ hasText: "B · B 집계 결과" })
+    .locator("summary")
+    .click();
+  await expect(stored.getByText("0.3", { exact: true })).toBeVisible();
+  await page.reload();
+  await page
+    .getByRole("button", { name: "합성 큐.csv 미리보기", exact: true })
+    .click();
+  await expect(queue.locator(".summary-run-list > li")).toHaveCount(1);
+  await queue
+    .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
+    .click();
+  await expect(stored.locator(".stored-row-counts dd")).toHaveText([
+    "4행",
+    "3행",
+    "1행",
+  ]);
+  await page.getByRole("checkbox", { name: "A · A", exact: true }).uncheck();
+  await expect(button).toBeDisabled();
+  await expect(stored).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});

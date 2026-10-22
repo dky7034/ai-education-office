@@ -2296,3 +2296,31 @@ h1 {
   border: 1px solid #b6cbbd;
   border-radius: 8px;
 }
+
+.background-summary {
+  border: 1px solid #b6cbbd;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 18px 0;
+  min-width: 0;
+}
+.summary-run-list {
+  list-style: none;
+  padding: 0;
+}
+.summary-run-list > li {
+  border-top: 1px solid #dbe5df;
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+.stored-summary {
+  border-top: 1px solid #b6cbbd;
+  padding-top: 12px;
+  overflow-wrap: anywhere;
+}
+.stored-summary > details {
+  padding: 10px 0;
+}
+.stored-summary h5 {
+  margin-bottom: 10px;
+}

@@ -1,3 +1,4 @@
+import { runRepository, RUN_SCHEMA } from "./runStore.ts";
 import type { SurveyQuestion } from "./survey.ts";
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
@@ -102,7 +103,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 5) {
+  if (version > 6) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -173,8 +174,10 @@ export function createStore(
     PRAGMA user_version = 5;
     COMMIT;
   `);
+  if (version < 6) db.exec(RUN_SCHEMA);
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
+    ...runRepository(db),
     selection(
       account: string,
       jobId: string,
