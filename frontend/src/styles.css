@@ -2391,3 +2391,27 @@ h1 {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.job-search {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.job-search label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.job-search input,
+.job-search select {
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  font: inherit;
+  border: 1px solid #bacab0;
+  border-radius: 6px;
+}
+.job-search > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

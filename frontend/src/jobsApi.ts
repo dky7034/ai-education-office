@@ -1,5 +1,30 @@
 import type { StaffId, TaskKind } from "./simulation";
 
+export const JOB_FILTERS = [
+  ["all", "전체"],
+  ["none", "집계 이력 없음"],
+  ["queued", "집계 대기"],
+  ["running", "집계 실행 중"],
+  ["completed", "최근 집계 완료"],
+  ["failed", "최근 집계 실패"],
+  ["cancelled", "최근 집계 취소"],
+  ["review_pending", "검토 대기"],
+  ["approved", "승인 기록"],
+  ["rejected", "반려 기록"],
+  ["summary_only", "요약만 보관"],
+] as const;
+export type JobFilter = (typeof JOB_FILTERS)[number][0];
+export interface JobSearch {
+  q: string;
+  status: JobFilter;
+}
+export function jobListPath(search: JobSearch, offset = 0) {
+  const params = new URLSearchParams();
+  if (search.q) params.set("q", search.q);
+  if (search.status !== "all") params.set("status", search.status);
+  if (offset) params.set("offset", String(offset));
+  return params.size ? "?" + params.toString() : "";
+}
 export interface JobActivity {
   active: { queued: number; running: number };
   latest: {

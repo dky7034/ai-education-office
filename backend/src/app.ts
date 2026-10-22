@@ -1,3 +1,4 @@
+import { JOB_FILTERS, type JobFilter } from "./jobSearch.ts";
 import express, { type ErrorRequestHandler } from "express";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -75,7 +76,30 @@ export function createApp(
     const limit = req.query.limit === undefined ? 20 : Number(req.query.limit);
     const offset =
       req.query.offset === undefined ? 0 : Number(req.query.offset);
+    const q = req.query.q === undefined ? "" : req.query.q,
+      status = req.query.status === undefined ? "all" : req.query.status;
     if (
+      typeof q !== "string" ||
+      q.length > 100 ||
+      /[\u0000-\u001f\u007f]/.test(q) ||
+      typeof status !== "string" ||
+      !JOB_FILTERS.includes(status as JobFilter) ||
+      Object.keys(req.query).some(
+        (key) => !["limit", "offset", "q", "status"].includes(key),
+      )
+    ) {
+      res
+        .status(400)
+        .json({
+          error:
+            "검색어는 제어 문자 없이 100자 이하, 상태는 지원하는 필터로 지정해 주세요.",
+        });
+      return;
+    }
+    if (
+      (req.query.limit !== undefined && typeof req.query.limit !== "string") ||
+      (req.query.offset !== undefined &&
+        typeof req.query.offset !== "string") ||
       !Number.isInteger(limit) ||
       limit < 1 ||
       limit > 100 ||
@@ -89,7 +113,12 @@ export function createApp(
       });
       return;
     }
-    res.json(store.list(res.locals.account.id, limit, offset));
+    res.json(
+      store.list(res.locals.account.id, limit, offset, {
+        q: q.trim(),
+        status: status as JobFilter,
+      }),
+    );
   });
   app.post("/api/jobs", (req, res) => {
     const body = req.body;

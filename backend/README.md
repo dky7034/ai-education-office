@@ -88,3 +88,5 @@ v7은 `summary_run_artifacts`를 추가합니다. `OFFICE_OUTPUT_DIR` 기본값�
 v8은 summary_run_reviews를 추가합니다. 실행별 승인·반려·대상 해시·영구 검토 이력·재전송 계약은 [결과 검토 안내](../docs/RESULT_REVIEW.md)를 따릅니다.
 
 업무 목록/상세의 `job.activity`는 첨부별 최근 실행·검토 기록과 전체 대기/실행 건수를 반환합니다. 파일 무결성은 읽지 않으며 스키마 v8을 유지합니다. 범위·정렬·응답은 [업무 현황 안내](../docs/JOB_ACTIVITY.md)를 따릅니다.
+
+`GET /api/jobs`는 `q`와 `status`를 페이지 조회 전에 적용하고 정규화한 `filters`를 반환합니다. 허용 상태·100자 검색·총건수·잘못된 쿼리 처리 기준은 [업무 검색 안내](../docs/JOB_SEARCH.md)를 따릅니다. 스키마 v8을 유지합니다.

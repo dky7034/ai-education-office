@@ -229,6 +229,18 @@ test("업무 목록의 최근 집계·검토 현황과 결과 링크·새로고�
   await refresh.click();
   await expect(refresh).toBeEnabled();
   await expect(comment).toHaveValue("저장 전 합성 검토 의견");
+  const search = page.getByRole("form", {
+    name: "업무 검색·상태 필터",
+    exact: true,
+  });
+  await search
+    .getByLabel("집계·검토 상태", { exact: true })
+    .selectOption("review_pending");
+  await search
+    .getByRole("button", { name: "검색·필터 적용", exact: true })
+    .click();
+  await expect(row).toContainText("검토 대기 1건");
+  await expect(comment).toHaveValue("저장 전 합성 검토 의견");
   await review
     .getByLabel("이 실행 결과와 보관 파일을 확인했습니다", { exact: true })
     .check();
@@ -236,6 +248,17 @@ test("업무 목록의 최근 집계·검토 현황과 결과 링크·새로고�
   await expect(review.locator(".review-decision strong")).toHaveText(
     "승인 확정",
   );
+  await expect(row).toHaveCount(0);
+  await expect(
+    page.getByText("검색·필터 조건에 맞는 업무가 없습니다.", { exact: true }),
+  ).toBeVisible();
+  await expect(linked).toContainText("승인 확정");
+  await search
+    .getByLabel("집계·검토 상태", { exact: true })
+    .selectOption("approved");
+  await search
+    .getByRole("button", { name: "검색·필터 적용", exact: true })
+    .click();
   await expect(row).toContainText("승인 기록 1건");
   await expect(row).toContainText("검토 대기 0건");
   const url = page.url();
@@ -260,6 +283,13 @@ test("업무 목록의 최근 집계·검토 현황과 결과 링크·새로고�
     )
     .toBe("completed");
   await refresh.click();
+  await expect(row).toHaveCount(0);
+  await search
+    .getByLabel("집계·검토 상태", { exact: true })
+    .selectOption("review_pending");
+  await search
+    .getByRole("button", { name: "검색·필터 적용", exact: true })
+    .click();
   await expect(row).toContainText("검토 대기 1건");
   await expect(row).toContainText("승인 기록 0건");
   // Historical deep link keeps the previously approved run visible while the list shows the new run.
@@ -287,7 +317,7 @@ test("업무 목록의 최근 집계·검토 현황과 결과 링크·새로고�
     await registerViaApi(other);
     await other.goto(url);
     await expect(other.locator(".request-history")).toContainText(
-      "아직 저장한 업무가 없습니다.",
+      "검색·필터 조건에 맞는 업무가 없습니다.",
     );
     await expect(
       other.getByRole("region", { name: "선택한 업무 상세" }),
@@ -296,6 +326,124 @@ test("업무 목록의 최근 집계·검토 현황과 결과 링크·새로고�
   } finally {
     await context.close();
   }
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("업무 검색·필터 URL 복원·서버 페이지·늦은 더 보기 응답 차단·빈 결과·연결 재시도", async ({
+  page,
+}) => {
+  await registerViaApi(page);
+  for (let i = 0; i < 27; i++) {
+    const response = await page.request.post("/api/jobs", {
+      headers: {
+        "X-Office-Request": "1",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: {
+        kind: "survey",
+        title: i < 23 ? `합성 검색대상 ${i}` : `합성 제외 ${i}`,
+        instructions: i === 0 ? "가상 원문 100%_ 확인" : "가상 요청 내용",
+      },
+    });
+    expect(response.status()).toBe(201);
+  }
+  await page.goto("/?q=" + encodeURIComponent("검색대상") + "&status=none");
+  const search = page.getByRole("form", {
+      name: "업무 검색·상태 필터",
+      exact: true,
+    }),
+    query = search.getByLabel("업무 검색", { exact: true }),
+    status = search.getByLabel("집계·검토 상태", { exact: true }),
+    apply = search.getByRole("button", { name: "검색·필터 적용", exact: true });
+  const rows = page.locator(".saved-job-list > li"),
+    heading = page.locator(".request-history > h3");
+  await expect(heading).toHaveText("검색·필터 결과 23건");
+  await expect(rows).toHaveCount(20);
+  await expect(query).toHaveValue("검색대상");
+  await expect(status).toHaveValue("none");
+  await page.reload();
+  await expect(rows).toHaveCount(20);
+  await expect(query).toHaveValue("검색대상");
+  let release = () => {},
+    oldRequested = () => {},
+    oldFinished = () => {};
+  const requested = new Promise<void>((resolve) => (oldRequested = resolve)),
+    finished = new Promise<void>((resolve) => (oldFinished = resolve));
+  const held = new Promise<void>((resolve) => (release = resolve));
+  let hold = true;
+  await page.route("**/api/jobs?*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("q") === "연결실패") {
+      await route.abort();
+      return;
+    }
+    if (hold && url.searchParams.get("offset") === "20") {
+      hold = false;
+      const response = await route.fetch();
+      oldRequested();
+      await held;
+      try {
+        await route.fulfill({ response });
+      } catch {
+      } finally {
+        oldFinished();
+      }
+    } else await route.continue();
+  });
+  await page.getByRole("button", { name: "이력 더 보기", exact: true }).click();
+  await requested;
+  await query.fill("제외");
+  await apply.click();
+  await expect(rows).toHaveCount(4);
+  await expect(heading).toHaveText("검색·필터 결과 4건");
+  release();
+  await finished;
+  await expect(rows).toHaveCount(4);
+  await expect(page.locator(".saved-job-list")).not.toContainText("검색대상");
+  await query.fill("100%_");
+  await apply.click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText("검색대상 0");
+  await query.fill("찾을수없는합성문구");
+  await apply.click();
+  await expect(rows).toHaveCount(0);
+  await expect(
+    page.getByText("검색·필터 조건에 맞는 업무가 없습니다.", { exact: true }),
+  ).toBeVisible();
+  await query.fill("연결실패");
+  await apply.click();
+  await expect(page.locator(".request-history > .request-error")).toContainText(
+    "연결",
+  );
+  await expect(rows).toHaveCount(0);
+  await expect(heading).toHaveText("검색·필터 결과 —건");
+  const fileInput = page
+    .getByRole("region", { name: "업무 첨부 파일", exact: true })
+    .getByLabel("첨부할 파일", { exact: true });
+  await fileInput.setInputFiles({
+    name: "합성 미첨부.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from("A\n1\n"),
+  });
+  const reconnect = page
+    .locator(".request-history > .request-error")
+    .getByRole("button", { name: "다시 연결", exact: true });
+  await reconnect.click();
+  await expect(reconnect).toBeEnabled();
+  await expect(fileInput).toHaveValue(/합성 미첨부\.csv$/);
+  await search
+    .getByRole("button", { name: "검색·필터 초기화", exact: true })
+    .click();
+  await expect(rows).toHaveCount(20);
+  await expect(heading).toHaveText("저장된 업무 27건");
+  await expect(query).toHaveValue("");
+  await expect(status).toHaveValue("all");
+  expect(new URL(page.url()).searchParams.has("q")).toBe(false);
+  expect(new URL(page.url()).searchParams.has("status")).toBe(false);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

@@ -1,3 +1,4 @@
+import { jobWhere, type JobSearch } from "./jobSearch.ts";
 import { jobActivities } from "./jobActivity.ts";
 import { REVIEW_SCHEMA, reviewRepository } from "./reviewStore.ts";
 import { ARTIFACT_SCHEMA } from "./runArtifacts.ts";
@@ -502,17 +503,23 @@ export function createStore(
         throw error;
       }
     },
-    list(account: string, limit: number, offset: number) {
+    list(
+      account: string,
+      limit: number,
+      offset: number,
+      search: JobSearch = {},
+    ) {
+      const filter = jobWhere(account, search);
       const total = (
         db
-          .prepare("SELECT count(*) AS n FROM jobs WHERE account_id = ?")
-          .get(account) as { n: number }
+          .prepare(`SELECT count(*) AS n FROM jobs AS j WHERE ${filter.where}`)
+          .get(...filter.params) as { n: number }
       ).n;
       const jobs = db
         .prepare(
-          `${selectJob} WHERE account_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
+          `${selectJob} AS j WHERE ${filter.where} ORDER BY j.created_at DESC, j.id DESC LIMIT ? OFFSET ?`,
         )
-        .all(account, limit, offset) as unknown as JobRow[];
+        .all(...filter.params, limit, offset) as unknown as JobRow[];
       const activities = jobActivities(
         db,
         account,
@@ -524,6 +531,7 @@ export function createStore(
           activity: activities.get(job.id)!,
         })),
         page: { total, limit, offset, hasMore: offset + jobs.length < total },
+        filters: { q: filter.q, status: filter.status },
       };
     },
     detail(account: string, id: string) {

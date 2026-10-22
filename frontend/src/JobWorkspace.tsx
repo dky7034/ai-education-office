@@ -5,6 +5,10 @@ import { createStaff, TASKS, type TaskKind } from "./simulation";
 import {
   jobsApi,
   ApiError,
+  JOB_FILTERS,
+  jobListPath,
+  type JobSearch,
+  type JobFilter,
   type JobDetail,
   type JobPage,
   type SavedJob,
@@ -47,6 +51,23 @@ export default function JobWorkspace({
       throw error;
     }
   }
+  const [filters, setFilters] = useState<JobSearch>(() => {
+    const params = new URLSearchParams(location.search),
+      status = params.get("status") ?? "all";
+    return {
+      q: (params.get("q") ?? "").trim(),
+      status: JOB_FILTERS.some(([id]) => id === status)
+        ? (status as JobFilter)
+        : "all",
+    };
+  });
+  const [searchDraft, setSearchDraft] = useState(filters.q),
+    [statusDraft, setStatusDraft] = useState<JobFilter>(filters.status);
+  const [loadedFilters, setLoadedFilters] = useState<JobSearch | null>(null);
+  const filtersRef = useRef(filters);
+  const listMatches =
+    loadedFilters?.q === filters.q && loadedFilters?.status === filters.status;
+  const filtered = !!filters.q || filters.status !== "all";
   const [jobs, setJobs] = useState<SavedJob[]>([]);
   const [page, setPage] = useState<JobPage["page"] | null>(null);
   const [selected, setSelected] = useState<string | null>(() =>
@@ -86,8 +107,10 @@ export default function JobWorkspace({
     setLoading(true);
     setMoreLoading(false);
     setError("");
-    accountApi<JobPage>("", { signal: abort.signal })
+    accountApi<JobPage>(jobListPath(filters), { signal: abort.signal })
       .then((data) => {
+        if (abort.signal.aborted || filtersRef.current !== filters) return;
+        setLoadedFilters(filters);
         setJobs(data.jobs);
         setPage(data.page);
         setConnected(true);
@@ -96,14 +119,13 @@ export default function JobWorkspace({
       .catch((e) => {
         if (!abort.signal.aborted) {
           setError(message(e));
-          setConnected(false);
         }
       })
       .finally(() => {
         if (!abort.signal.aborted) setLoading(false);
       });
     return () => abort.abort();
-  }, [version, refreshKey]);
+  }, [version, refreshKey, filters, activityVersion]);
 
   useEffect(() => {
     if (!selected || !connected) {
@@ -129,35 +151,34 @@ export default function JobWorkspace({
   }, [selected, connected, version, refreshKey]);
 
   useEffect(() => {
-    if (!activityVersion) return;
+    if (!activityVersion || !selected || !connected) return;
     const abort = new AbortController();
-    generation.current++;
-    setLoading(true);
-    setMoreLoading(false);
-    Promise.all([
-      accountApi<JobPage>("", { signal: abort.signal }),
-      selected
-        ? accountApi<JobDetail>(`/${encodeURIComponent(selected)}`, {
-            signal: abort.signal,
-          })
-        : Promise.resolve(null),
-    ])
-      .then(([data, current]) => {
-        if (abort.signal.aborted) return;
-        setJobs(data.jobs);
-        setPage(data.page);
-        setConnected(true);
-        setError("");
-        if (current) setDetail(current);
+    setDetailError("");
+    accountApi<JobDetail>(`/${encodeURIComponent(selected)}`, {
+      signal: abort.signal,
+    })
+      .then((current) => {
+        if (!abort.signal.aborted) setDetail(current);
       })
       .catch((e) => {
-        if (!abort.signal.aborted) setError(message(e));
-      })
-      .finally(() => {
-        if (!abort.signal.aborted) setLoading(false);
+        if (!abort.signal.aborted) setDetailError(message(e));
       });
     return () => abort.abort();
-  }, [activityVersion, selected, version, refreshKey, accountId]);
+  }, [activityVersion, selected, connected, accountId]);
+
+  function applyFilters(next: JobSearch) {
+    generation.current++;
+    filtersRef.current = next;
+    setFilters(next);
+    setSearchDraft(next.q);
+    setStatusDraft(next.status);
+    const url = new URL(location.href);
+    if (next.q) url.searchParams.set("q", next.q);
+    else url.searchParams.delete("q");
+    if (next.status !== "all") url.searchParams.set("status", next.status);
+    else url.searchParams.delete("status");
+    history.replaceState(null, "", url);
+  }
 
   function select(
     id: string,
@@ -217,12 +238,14 @@ export default function JobWorkspace({
     }
   }
   async function more() {
-    if (!page || moreLoading || loading) return;
+    if (!page || moreLoading || loading || !listMatches) return;
     const current = generation.current;
     setMoreLoading(true);
     setError("");
     try {
-      const result = await accountApi<JobPage>(`?offset=${jobs.length}`);
+      const result = await accountApi<JobPage>(
+        jobListPath(filters, jobs.length),
+      );
       if (current !== generation.current) return;
       setJobs((previous) => [
         ...previous,
@@ -351,8 +374,61 @@ export default function JobWorkspace({
         </form>
         <div className="request-history" aria-label="저장된 업무 이력">
           <h3>
-            저장된 업무 <span>{page?.total ?? 0}건</span>
+            {filtered ? "검색·필터 결과" : "저장된 업무"}{" "}
+            <span>{listMatches ? (page?.total ?? 0) : "—"}건</span>
           </h3>
+          <form
+            className="job-search"
+            aria-label="업무 검색·상태 필터"
+            onSubmit={(event) => {
+              event.preventDefault();
+              applyFilters({ q: searchDraft.trim(), status: statusDraft });
+            }}
+          >
+            <label htmlFor="job-query">업무 검색</label>
+            <input
+              id="job-query"
+              type="search"
+              value={searchDraft}
+              maxLength={100}
+              placeholder="제목·요청 내용 검색"
+              onChange={(event) => setSearchDraft(event.target.value)}
+            />
+            <label htmlFor="job-status-filter">집계·검토 상태</label>
+            <select
+              id="job-status-filter"
+              value={statusDraft}
+              onChange={(event) =>
+                setStatusDraft(event.target.value as JobFilter)
+              }
+            >
+              {JOB_FILTERS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <div>
+              <button className="secondary-button" type="submit">
+                검색·필터 적용
+              </button>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => applyFilters({ q: "", status: "all" })}
+              >
+                검색·필터 초기화
+              </button>
+            </div>
+          </form>
+          {listMatches && filtered && (
+            <p className="session-note">
+              적용 조건: {loadedFilters?.q ? `“${loadedFilters.q}” · ` : ""}
+              {JOB_FILTERS.find(([id]) => id === loadedFilters?.status)?.[1]} ·
+              제목·요청 내용의 포함 검색입니다. 완료·검토 필터는 첨부별 최근
+              실행 중 하나라도 해당하면 표시합니다.
+            </p>
+          )}
           {loading && (
             <p className="request-empty" role="status">
               업무 이력을 불러오는 중입니다.
@@ -364,19 +440,17 @@ export default function JobWorkspace({
               <button
                 className="text-button"
                 disabled={loading}
-                onClick={() =>
-                  activityVersion
-                    ? setActivityVersion((v) => v + 1)
-                    : setVersion((v) => v + 1)
-                }
+                onClick={() => setActivityVersion((v) => v + 1)}
               >
                 다시 연결
               </button>
             </p>
           )}
-          {!loading && connected && jobs.length === 0 && (
+          {!loading && connected && listMatches && jobs.length === 0 && (
             <p className="request-empty">
-              아직 저장한 업무가 없습니다. 새 업무 요청을 작성해 보세요.
+              {filtered
+                ? "검색·필터 조건에 맞는 업무가 없습니다."
+                : "아직 저장한 업무가 없습니다. 새 업무 요청을 작성해 보세요."}
             </p>
           )}
           <button
@@ -391,7 +465,7 @@ export default function JobWorkspace({
             새로고침은 열어 둔 결과·검토 의견을 유지합니다.
           </p>
           <ul className="saved-job-list">
-            {jobs.map((job) => (
+            {(listMatches ? jobs : []).map((job) => (
               <li key={job.id} data-job-id={job.id}>
                 <button
                   aria-pressed={selected === job.id}
@@ -423,7 +497,7 @@ export default function JobWorkspace({
               </li>
             ))}
           </ul>
-          {page?.hasMore && (
+          {listMatches && page?.hasMore && (
             <button
               className="secondary-button more-jobs"
               disabled={loading || moreLoading}
@@ -450,6 +524,14 @@ export default function JobWorkspace({
               )}
               {detail && (
                 <>
+                  {listMatches &&
+                    !loading &&
+                    !jobs.some((job) => job.id === detail.job.id) && (
+                      <p className="session-note">
+                        선택한 업무는 현재 표시된 목록 밖에 있습니다. 열어 둔
+                        상세 결과는 유지합니다.
+                      </p>
+                    )}
                   <h3>{detail.job.title}</h3>
                   <dl>
                     <dt>상태</dt>
