@@ -10,6 +10,15 @@ interface Summary {
   includedRows: number;
   excludedRows: number;
   columns: {
+    numeric: {
+      count: number;
+      nonNumericCount: number;
+      outOfRangeCount: number;
+      sum: string | null;
+      mean: string | null;
+      min: string | null;
+      max: string | null;
+    };
     index: number;
     letter: string;
     label: string;
@@ -233,6 +242,41 @@ export default function FileSummary({
                 <dt>서로 다른 일반 값</dt>
                 <dd>{column.distinctCount}개</dd>
               </dl>
+              <div
+                className="numeric-summary"
+                role="group"
+                aria-label={`${column.letter}열 숫자 집계`}
+              >
+                <h6>숫자 기초 집계</h6>
+                <p className="session-note">
+                  숫자 모양의 일반 값만 계산합니다. 부호·소수점·지수 표기를
+                  지원하며 쉼표·통화·퍼센트·날짜 문자는 변환하지 않습니다.
+                  정규화 후 정수부·소수부 각각 100자리까지 지원합니다.
+                  누락·수식·오류는 제외합니다. 합계는 정확한 십진수, 평균은
+                  소수점 이하 최대 6자리로 반올림합니다(7번째 자리가 5 이상이면
+                  절댓값이 커지는 방향). XLSX 날짜 일련번호·숫자 모양 식별자도
+                  포함될 수 있으며 평가 점수가 아닙니다.
+                </p>
+                <dl className="numeric-counts">
+                  <dt>숫자 인정</dt>
+                  <dd>{column.numeric.count}개</dd>
+                  <dt>숫자 아닌 일반 값</dt>
+                  <dd>{column.numeric.nonNumericCount}개</dd>
+                  <dt>숫자 범위 초과</dt>
+                  <dd>{column.numeric.outOfRangeCount}개</dd>
+                  <dt>합계</dt>
+                  <dd>{column.numeric.sum ?? "—"}</dd>
+                  <dt>평균</dt>
+                  <dd>{column.numeric.mean ?? "—"}</dd>
+                  <dt>최솟값</dt>
+                  <dd>{column.numeric.min ?? "—"}</dd>
+                  <dt>최댓값</dt>
+                  <dd>{column.numeric.max ?? "—"}</dd>
+                </dl>
+                {column.numeric.count === 0 && (
+                  <p className="session-note">숫자로 인정한 값이 없습니다.</p>
+                )}
+              </div>
               {column.frequencies.length > 0 && (
                 <div
                   className="frequency-chart"

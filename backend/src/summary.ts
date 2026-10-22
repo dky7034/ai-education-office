@@ -1,4 +1,5 @@
 import { scanTable, PreviewError } from "./tabular.ts";
+import { numericAccumulator } from "./numericSummary.ts";
 export const FREQUENCY_LIMIT = 30;
 export interface SummaryInput {
   sheetId: string;
@@ -28,6 +29,7 @@ export function summarize(
     formulaCount: 0,
     errorCount: 0,
     frequencies: new Map<string, number>(),
+    numeric: numericAccumulator(),
   }));
   let includedRows = 0;
   const table = scanTable(
@@ -52,6 +54,7 @@ export function summarize(
         else if (!value) stat.missingCount++;
         else {
           stat.valueCount++;
+          stat.numeric.add(value);
           stat.frequencies.set(value, (stat.frequencies.get(value) ?? 0) + 1);
         }
       }
@@ -76,10 +79,11 @@ export function summarize(
         (a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0),
       );
       const shown = all.slice(0, options.frequencyLimit ?? FREQUENCY_LIMIT);
-      const { frequencies: _frequencies, ...counts } = stat;
+      const { frequencies: _frequencies, numeric, ...counts } = stat;
       const column = table.columns.find((c) => c.index === stat.index)!;
       return {
         ...counts,
+        numeric: numeric.result(),
         letter: column.letter,
         label: column.label,
         distinctCount: all.length,

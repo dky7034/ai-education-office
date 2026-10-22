@@ -274,3 +274,80 @@ test("실제 빈도 그래프·HTML 보고서 다운로드·안전한 오프라�
   await expect(panel.getByRole("alert")).toContainText("다른 화면");
   await expect(panel.locator(".summary-results")).toHaveCount(0);
 });
+
+test("숫자 부분집합·정확한 소수 합계·빈 숫자 결과와 CSV/HTML 다운로드 일치", async ({
+  page,
+  context,
+}) => {
+  const { panel } = await attach(
+    page,
+    "합성 숫자.csv",
+    Buffer.from(
+      "수치,분류\n0.1,합성\n0.2,합성\n문자,합성\n1e100,합성\n,합성\n",
+    ),
+    [0, 1],
+  );
+  await panel
+    .getByRole("button", { name: "전체 데이터 집계", exact: true })
+    .click();
+  const numeric = panel.getByRole("group", {
+    name: "A열 숫자 집계",
+    exact: true,
+  });
+  await expect(numeric.locator("dd")).toHaveText([
+    "2개",
+    "1개",
+    "1개",
+    "0.3",
+    "0.15",
+    "0.1",
+    "0.2",
+  ]);
+  const empty = panel.getByRole("group", {
+    name: "B열 숫자 집계",
+    exact: true,
+  });
+  await expect(empty.locator("dd")).toHaveText([
+    "0개",
+    "5개",
+    "0개",
+    "—",
+    "—",
+    "—",
+    "—",
+  ]);
+  await expect(empty).toContainText("숫자로 인정한 값이 없습니다.");
+  for (const format of ["csv", "html"] as const) {
+    const event = page.waitForEvent("download");
+    await panel
+      .getByRole("button", {
+        name:
+          format === "csv"
+            ? "전체 빈도 CSV 다운로드"
+            : "인쇄용 HTML 보고서 다운로드",
+        exact: true,
+      })
+      .click();
+    const data = await readFile((await (await event).path())!);
+    if (format === "csv")
+      expect(
+        [...csvRows(data)].some(
+          (r) => r[0] === "숫자 집계" && r[3] === "합계" && r[4] === "'0.3",
+        ),
+      ).toBe(true);
+    else {
+      const report = await context.newPage();
+      await report.setContent(data.toString());
+      await expect(
+        report.locator(".numeric-summary").first().locator(".decimal"),
+      ).toHaveText(["0.3", "0.15", "0.1", "0.2"]);
+      await report.setViewportSize({ width: 393, height: 852 });
+      expect(
+        await report.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      await report.close();
+    }
+  }
+});

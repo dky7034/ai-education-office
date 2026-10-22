@@ -1,4 +1,5 @@
 import type { summarize } from "./summary.ts";
+import { NUMERIC_RULE } from "./numericSummary.ts";
 import { PreviewError } from "./tabular.ts";
 export const MAX_EXPORT_BYTES = 20 * 1024 * 1024;
 interface ExportMeta {
@@ -59,6 +60,7 @@ export function summaryCsv(
   ] as const)
     add(["전체 요약", "", "", label, "", count, "", ""]);
   const rules = [
+    NUMERIC_RULE,
     "저장한 시트·제목 행·선택 열의 전체 데이터를 계산합니다. 행 수는 응답자 수가 아닙니다.",
     "선택 열이 모두 공란인 행은 제외합니다. 나머지 행에서 열별 누락을 셉니다.",
     "일반 값은 앞뒤 공백만 제거합니다. 대소문자·숫자 표기·내부 공백은 유지합니다.",
@@ -79,6 +81,28 @@ export function summaryCsv(
       ["서로 다른 일반 값", column.distinctCount],
     ] as const)
       add(["열 요약", column.letter, label, name, "", count, "", ""]);
+    for (const [name, count] of [
+      ["숫자 인정", column.numeric.count],
+      ["숫자 아닌 일반 값", column.numeric.nonNumericCount],
+      ["숫자 범위 초과", column.numeric.outOfRangeCount],
+    ] as const)
+      add(["숫자 집계", column.letter, label, name, "", count, "", ""]);
+    for (const [name, value] of [
+      ["합계", column.numeric.sum],
+      ["평균", column.numeric.mean],
+      ["최솟값", column.numeric.min],
+      ["최댓값", column.numeric.max],
+    ] as const)
+      add([
+        "숫자 집계",
+        column.letter,
+        label,
+        name,
+        value === null ? "" : text(value),
+        "",
+        value === null ? "숫자로 인정한 값 없음" : "정밀도 보존용 텍스트",
+        "",
+      ]);
     if (
       column.otherCount ||
       column.otherDistinctCount ||
