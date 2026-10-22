@@ -120,3 +120,185 @@ test("연결 실패와 저장 응답 유실을 알리고 재시도 시 중복 �
   await expect(workspace.locator(".saved-job-list li")).toHaveCount(1);
   await expect(workspace.locator(".saved-events li")).toHaveCount(1);
 });
+
+test("업무 목록의 최근 집계·검토 현황과 결과 링크·새로고침·의견 보존·계정 격리", async ({
+  page,
+  browser,
+}) => {
+  await registerViaApi(page);
+  const title = "합성 집계 현황 검증";
+  const { job } = await (
+    await page.request.post("/api/jobs", {
+      headers: {
+        "X-Office-Request": "1",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: { kind: "survey", title, instructions: "가상 결과 검토" },
+    })
+  ).json();
+  const { attachment } = await (
+    await page.request.post(`/api/jobs/${job.id}/attachments`, {
+      headers: {
+        "X-Office-Request": "1",
+        "Content-Type": "application/octet-stream",
+        "X-File-Name": encodeURIComponent("합성 현황.csv"),
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: Buffer.from("A\n1\n3\n"),
+    })
+  ).json();
+  const base = `/api/jobs/${job.id}/attachments/${attachment.id}`;
+  expect(
+    (
+      await page.request.put(base + "/selection", {
+        headers: { "X-Office-Request": "1" },
+        data: {
+          sheetId: "csv",
+          headerRow: 1,
+          columns: [0],
+          questions: [],
+          revision: 0,
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  const { run } = await (
+    await page.request.post(base + "/runs", {
+      headers: {
+        "X-Office-Request": "1",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: { revision: 1 },
+    })
+  ).json();
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(base + "/runs/" + run.id)).json()).run
+          .status,
+    )
+    .toBe("completed");
+  await page.goto("/");
+  const row = page.locator(`.saved-job-list > li[data-job-id="${job.id}"]`);
+  await expect(row).toContainText("완료 1건");
+  await expect(row).toContainText("검토 대기 1건");
+  await expect(row).toContainText("승인 기록 0건");
+  await row
+    .getByRole("button", { name: title + " 최근 집계·검토 보기", exact: true })
+    .click();
+  const linked = page.getByRole("region", {
+    name: "선택한 집계·검토 상세",
+    exact: true,
+  });
+  const stored = linked.getByRole("region", {
+    name: "저장된 백그라운드 집계 결과",
+    exact: true,
+  });
+  await expect(stored.locator(".stored-row-counts dd")).toHaveText([
+    "2행",
+    "2행",
+    "0행",
+  ]);
+  await expect(page).toHaveURL(
+    new RegExp(`job=${job.id}.*file=${attachment.id}.*run=${run.id}`),
+  );
+  const review = linked.getByRole("region", {
+      name: "결과물 검토",
+      exact: true,
+    }),
+    comment = review.getByLabel("검토 의견 (선택)", { exact: true });
+  await comment.fill("저장 전 합성 검토 의견");
+  const refresh = page.getByRole("button", {
+    name: "집계·검토 상태 새로고침",
+    exact: true,
+  });
+  await refresh.click();
+  await expect(refresh).toBeEnabled();
+  await expect(comment).toHaveValue("저장 전 합성 검토 의견");
+  let offline = true;
+  await page.route("**/api/jobs", async (route) => {
+    if (offline && route.request().method() === "GET") await route.abort();
+    else await route.continue();
+  });
+  await refresh.click();
+  await expect(page.locator(".request-history > .request-error")).toContainText(
+    "연결",
+  );
+  await expect(comment).toHaveValue("저장 전 합성 검토 의견");
+  offline = false;
+  await refresh.click();
+  await expect(refresh).toBeEnabled();
+  await expect(comment).toHaveValue("저장 전 합성 검토 의견");
+  await review
+    .getByLabel("이 실행 결과와 보관 파일을 확인했습니다", { exact: true })
+    .check();
+  await review.getByRole("button", { name: "승인 확정", exact: true }).click();
+  await expect(review.locator(".review-decision strong")).toHaveText(
+    "승인 확정",
+  );
+  await expect(row).toContainText("승인 기록 1건");
+  await expect(row).toContainText("검토 대기 0건");
+  const url = page.url();
+  await page.reload();
+  await expect(linked.locator(".review-decision strong")).toHaveText(
+    "승인 확정",
+  );
+  const { run: next } = await (
+    await page.request.post(base + "/runs", {
+      headers: {
+        "X-Office-Request": "1",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      data: { revision: 1 },
+    })
+  ).json();
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(base + "/runs/" + next.id)).json()).run
+          .status,
+    )
+    .toBe("completed");
+  await refresh.click();
+  await expect(row).toContainText("검토 대기 1건");
+  await expect(row).toContainText("승인 기록 0건");
+  // Historical deep link keeps the previously approved run visible while the list shows the new run.
+  await expect(linked.locator(".review-decision strong")).toHaveText(
+    "승인 확정",
+  );
+  const { rm } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const directory = process.env.OFFICE_E2E_DB?.endsWith("e2e-dev.sqlite")
+    ? "e2e-dev"
+    : "e2e";
+  await rm(resolve("storage/input", directory, job.id, attachment.id));
+  await page.reload();
+  await expect(linked.locator(".review-decision strong")).toHaveText(
+    "승인 확정",
+  );
+  await expect(stored.locator(".stored-row-counts dd")).toHaveText([
+    "2행",
+    "2행",
+    "0행",
+  ]);
+  const context = await browser.newContext();
+  try {
+    const other = await context.newPage();
+    await registerViaApi(other);
+    await other.goto(url);
+    await expect(other.locator(".request-history")).toContainText(
+      "아직 저장한 업무가 없습니다.",
+    );
+    await expect(
+      other.getByRole("region", { name: "선택한 업무 상세" }),
+    ).toContainText("업무를 찾을 수 없거나");
+    await expect(other.locator(".stored-summary")).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});

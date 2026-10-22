@@ -1,3 +1,4 @@
+import { jobActivities } from "./jobActivity.ts";
 import { REVIEW_SCHEMA, reviewRepository } from "./reviewStore.ts";
 import { ARTIFACT_SCHEMA } from "./runArtifacts.ts";
 import { runRepository, RUN_SCHEMA } from "./runStore.ts";
@@ -512,8 +513,16 @@ export function createStore(
           `${selectJob} WHERE account_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
         )
         .all(account, limit, offset) as unknown as JobRow[];
+      const activities = jobActivities(
+        db,
+        account,
+        jobs.map((job) => job.id),
+      );
       return {
-        jobs: jobs.map(publicJob),
+        jobs: jobs.map((job) => ({
+          ...publicJob(job),
+          activity: activities.get(job.id)!,
+        })),
         page: { total, limit, offset, hasMore: offset + jobs.length < total },
       };
     },
@@ -527,7 +536,13 @@ export function createStore(
           "SELECT id, job_id AS jobId, type, message, created_at AS createdAt FROM job_events WHERE job_id = ? ORDER BY created_at, id",
         )
         .all(id) as unknown as JobEvent[];
-      return { job: publicJob(row), events };
+      return {
+        job: {
+          ...publicJob(row),
+          activity: jobActivities(db, account, [id]).get(id)!,
+        },
+        events,
+      };
     },
   };
 }

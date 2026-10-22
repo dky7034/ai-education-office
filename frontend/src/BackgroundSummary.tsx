@@ -37,6 +37,9 @@ export default function BackgroundSummary({
   revision,
   canSubmit,
   onUnauthorized,
+  onActivityChange,
+  initialRunId,
+  historyOnly = false,
 }: {
   jobId: string;
   fileId: string;
@@ -44,6 +47,9 @@ export default function BackgroundSummary({
   revision: number | null;
   canSubmit: boolean;
   onUnauthorized: () => void;
+  onActivityChange?: () => void;
+  initialRunId?: string;
+  historyOnly?: boolean;
 }) {
   const [data, setData] = useState<RunPage | null>(null),
     [error, setError] = useState(""),
@@ -61,6 +67,9 @@ export default function BackgroundSummary({
     requestKey = useRef<string | null>(null);
   const base = `/${jobId}/attachments/${fileId}/runs`,
     headers = { "X-Office-Account": accountId };
+  const activityChanged = useRef(onActivityChange),
+    pendingStates = useRef(new Map<string, string>());
+  activityChanged.current = onActivityChange;
   const unauthorized = useRef(onUnauthorized);
   unauthorized.current = onUnauthorized;
   const fail = (e: unknown) => {
@@ -94,6 +103,20 @@ export default function BackgroundSummary({
         if (controller.signal.aborted) return;
         setData(result);
         if (
+          [...pendingStates.current].some(
+            ([id, status]) =>
+              result.runs.find((run) => run.id === id)?.status !== status,
+          )
+        )
+          activityChanged.current?.();
+        pendingStates.current = new Map(
+          result.runs
+            .filter(
+              (run) => run.status === "queued" || run.status === "running",
+            )
+            .map((run) => [run.id, run.status]),
+        );
+        if (
           result.runs.some(
             (r) => r.status === "queued" || r.status === "running",
           )
@@ -123,6 +146,7 @@ export default function BackgroundSummary({
       });
       if (!mounted.current) return;
       requestKey.current = null;
+      activityChanged.current?.();
       setOffset(0);
       setVersion((v) => v + 1);
     } catch (e) {
@@ -142,7 +166,10 @@ export default function BackgroundSummary({
         signal: abort.current.signal,
         body: "{}",
       });
-      if (mounted.current) setVersion((v) => v + 1);
+      if (mounted.current) {
+        setVersion((v) => v + 1);
+        activityChanged.current?.();
+      }
     } catch (e) {
       fail(e);
     } finally {
@@ -173,6 +200,39 @@ export default function BackgroundSummary({
       if (mounted.current) setBusy(false);
     }
   }
+  useEffect(() => {
+    if (!initialRunId) return;
+    const controller = new AbortController();
+    setBusy(true);
+    setStored(null);
+    setError("");
+    void jobsApi<{ run: Run }>(`${base}/${initialRunId}`, {
+      headers,
+      signal: controller.signal,
+    })
+      .then(async ({ run }) => {
+        if (run.status !== "completed") return;
+        const value = await jobsApi<{
+          summary: Summary;
+          artifacts: Artifact[];
+          reviewTargetHash: string;
+        }>(`${base}/${run.id}/result`, { headers, signal: controller.signal });
+        if (!controller.signal.aborted)
+          setStored({
+            run,
+            summary: value.summary,
+            artifacts: value.artifacts,
+            targetHash: value.reviewTargetHash,
+          });
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) fail(e);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setBusy(false);
+      });
+    return () => controller.abort();
+  }, [base, accountId, initialRunId]);
   async function download(artifact: Artifact) {
     if (busy || !stored) return;
     setBusy(true);
@@ -225,13 +285,15 @@ export default function BackgroundSummary({
         당시의 기록이며 현재 설정과 다를 수 있습니다. 저장된 결과의 보관 파일은
         다시 계산하지 않고 생성 당시 파일 그대로 내려받습니다.
       </p>
-      <button
-        className="secondary-button"
-        disabled={busy || !canSubmit || revision === null}
-        onClick={enqueue}
-      >
-        {busy ? "요청 처리 중…" : "백그라운드 집계 접수"}
-      </button>
+      {!historyOnly && (
+        <button
+          className="secondary-button"
+          disabled={busy || !canSubmit || revision === null}
+          onClick={enqueue}
+        >
+          {busy ? "요청 처리 중…" : "백그라운드 집계 접수"}
+        </button>
+      )}
       <button
         className="text-button"
         disabled={busy}
@@ -242,7 +304,7 @@ export default function BackgroundSummary({
       >
         작업 목록 새로고침
       </button>
-      {!canSubmit && (
+      {!historyOnly && !canSubmit && (
         <p className="session-note">
           작업을 접수하려면 현재 열·설문 설정을 먼저 저장해 주세요.
         </p>
@@ -368,6 +430,7 @@ export default function BackgroundSummary({
             base={`${base}/${stored.run.id}`}
             accountId={accountId}
             expectedTargetHash={stored.targetHash}
+            onActivityChange={onActivityChange}
             onUnauthorized={onUnauthorized}
           />
           <dl className="numeric-counts stored-row-counts">

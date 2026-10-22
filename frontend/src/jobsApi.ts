@@ -1,5 +1,16 @@
 import type { StaffId, TaskKind } from "./simulation";
 
+export interface JobActivity {
+  active: { queued: number; running: number };
+  latest: {
+    runId: string;
+    fileId: string;
+    filename: string;
+    revision: number;
+    status: "queued" | "running" | "completed" | "failed" | "cancelled";
+    review: "pending" | "approved" | "rejected" | "summary_only" | null;
+  }[];
+}
 export interface SavedJob {
   id: string;
   kind: TaskKind;
@@ -10,6 +21,7 @@ export interface SavedJob {
   executionMode: "not_connected";
   createdAt: string;
   updatedAt: string;
+  activity?: JobActivity;
 }
 export interface SavedEvent {
   id: string;

@@ -86,3 +86,5 @@ v6는 파일별 정량 집계 큐·전환 이벤트·큐 소유권을 추가합�
 v7은 `summary_run_artifacts`를 추가합니다. `OFFICE_OUTPUT_DIR` 기본값은 `storage/output/runs`이며 테스트는 별도 출력 경로를 사용합니다. 실행별 CSV/HTML/XLSX 게시·무결성·이전 기록 처리는 [실행 결과 파일 안내](../docs/RUN_ARTIFACTS.md)를 따릅니다.
 
 v8은 summary_run_reviews를 추가합니다. 실행별 승인·반려·대상 해시·영구 검토 이력·재전송 계약은 [결과 검토 안내](../docs/RESULT_REVIEW.md)를 따릅니다.
+
+업무 목록/상세의 `job.activity`는 첨부별 최근 실행·검토 기록과 전체 대기/실행 건수를 반환합니다. 파일 무결성은 읽지 않으며 스키마 v8을 유지합니다. 범위·정렬·응답은 [업무 현황 안내](../docs/JOB_ACTIVITY.md)를 따릅니다.

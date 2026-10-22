@@ -1,3 +1,4 @@
+import BackgroundSummary from "./BackgroundSummary";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import FilePreview from "./FilePreview";
 import { jobsApi, ApiError } from "./jobsApi";
@@ -14,11 +15,19 @@ export default function Attachments({
   jobId,
   accountId,
   onUnauthorized,
+  target,
+  onActivityChange,
 }: {
   jobId: string;
   accountId: string;
   onUnauthorized: () => void;
+  target?: { fileId: string; runId: string } | null;
+  onActivityChange?: () => void;
 }) {
+  const [targetRun, setTargetRun] = useState<{
+    fileId: string;
+    runId: string;
+  } | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [files, setFiles] = useState<Attachment[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -30,6 +39,13 @@ export default function Attachments({
   const alive = useRef(true),
     key = useRef<string | null>(null),
     input = useRef<HTMLInputElement>(null);
+  const linked = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (targetRun) {
+      linked.current?.focus({ preventScroll: true });
+      linked.current?.scrollIntoView({ block: "start" });
+    }
+  }, [targetRun?.fileId, targetRun?.runId]);
   const abort = useRef(new AbortController());
   const headers = { "X-Office-Account": accountId };
   function fail(e: unknown) {
@@ -65,6 +81,23 @@ export default function Attachments({
       });
     return () => controller.abort();
   }, [jobId, accountId, version]);
+  useEffect(() => {
+    if (!target) {
+      setTargetRun(null);
+      return;
+    }
+    if (loading) return;
+    setPreviewId(null);
+    if (files.some((file) => file.id === target.fileId)) {
+      setTargetRun(target);
+      setError("");
+    } else {
+      setTargetRun(null);
+      setError(
+        "연결된 첨부 파일을 찾을 수 없습니다. 업무와 파일을 다시 확인해 주세요.",
+      );
+    }
+  }, [target?.fileId, target?.runId, loading, files]);
   async function upload(event: FormEvent) {
     event.preventDefault();
     if (!file || busy) return;
@@ -211,11 +244,12 @@ export default function Attachments({
               className="text-button"
               disabled={busy}
               aria-expanded={previewId === item.id}
-              onClick={() =>
+              onClick={() => {
+                setTargetRun(null);
                 setPreviewId((previous) =>
                   previous === item.id ? null : item.id,
-                )
-              }
+                );
+              }}
             >
               {item.name} {previewId === item.id ? "미리보기 닫기" : "미리보기"}
             </button>
@@ -229,6 +263,30 @@ export default function Attachments({
           </li>
         ))}
       </ul>
+      {targetRun && (
+        <section
+          ref={linked}
+          tabIndex={-1}
+          className="linked-summary"
+          aria-label="선택한 집계·검토 상세"
+        >
+          <h4>
+            {files.find((file) => file.id === targetRun.fileId)?.name} 집계·검토
+          </h4>
+          <BackgroundSummary
+            key={`${targetRun.fileId}/${targetRun.runId}`}
+            jobId={jobId}
+            fileId={targetRun.fileId}
+            accountId={accountId}
+            revision={null}
+            canSubmit={false}
+            onUnauthorized={onUnauthorized}
+            historyOnly
+            initialRunId={targetRun.runId}
+            onActivityChange={onActivityChange}
+          />
+        </section>
+      )}
       {previewId && (
         <FilePreview
           key={previewId}
@@ -236,6 +294,7 @@ export default function Attachments({
           fileId={previewId}
           accountId={accountId}
           onUnauthorized={onUnauthorized}
+          onActivityChange={onActivityChange}
         />
       )}
     </section>

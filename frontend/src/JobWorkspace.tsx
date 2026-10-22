@@ -1,3 +1,4 @@
+import JobActivity from "./JobActivity";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowRight, ClipboardList, Plus, RefreshCw } from "lucide-react";
 import { createStaff, TASKS, type TaskKind } from "./simulation";
@@ -51,6 +52,16 @@ export default function JobWorkspace({
   const [selected, setSelected] = useState<string | null>(() =>
     new URLSearchParams(location.search).get("job"),
   );
+  const [target, setTarget] = useState<{
+    fileId: string;
+    runId: string;
+  } | null>(() => {
+    const params = new URLSearchParams(location.search),
+      fileId = params.get("file"),
+      runId = params.get("run");
+    return fileId && runId ? { fileId, runId } : null;
+  });
+  const [activityVersion, setActivityVersion] = useState(0);
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [version, setVersion] = useState(0);
   const [connected, setConnected] = useState(false);
@@ -117,10 +128,52 @@ export default function JobWorkspace({
     return () => abort.abort();
   }, [selected, connected, version, refreshKey]);
 
-  function select(id: string) {
+  useEffect(() => {
+    if (!activityVersion) return;
+    const abort = new AbortController();
+    generation.current++;
+    setLoading(true);
+    setMoreLoading(false);
+    Promise.all([
+      accountApi<JobPage>("", { signal: abort.signal }),
+      selected
+        ? accountApi<JobDetail>(`/${encodeURIComponent(selected)}`, {
+            signal: abort.signal,
+          })
+        : Promise.resolve(null),
+    ])
+      .then(([data, current]) => {
+        if (abort.signal.aborted) return;
+        setJobs(data.jobs);
+        setPage(data.page);
+        setConnected(true);
+        setError("");
+        if (current) setDetail(current);
+      })
+      .catch((e) => {
+        if (!abort.signal.aborted) setError(message(e));
+      })
+      .finally(() => {
+        if (!abort.signal.aborted) setLoading(false);
+      });
+    return () => abort.abort();
+  }, [activityVersion, selected, version, refreshKey, accountId]);
+
+  function select(
+    id: string,
+    nextTarget: { fileId: string; runId: string } | null = null,
+  ) {
     setSelected(id);
+    setTarget(nextTarget);
     const url = new URL(location.href);
     url.searchParams.set("job", id);
+    if (nextTarget) {
+      url.searchParams.set("file", nextTarget.fileId);
+      url.searchParams.set("run", nextTarget.runId);
+    } else {
+      url.searchParams.delete("file");
+      url.searchParams.delete("run");
+    }
     history.replaceState(null, "", url);
   }
   function edited() {
@@ -212,7 +265,8 @@ export default function JobWorkspace({
         <strong>접수·보관 단계</strong>
         <span>
           업무를 저장해도 AI가 실행되거나 직원이 움직이지 않습니다. 첨부 파일은
-          원본으로 보관하며, 분석과 실제 처리는 다음 단계입니다.
+          원본으로 보관합니다. 파일별 정량 집계·결과 검토는 별도로 접수하고
+          확인합니다.
         </span>
       </div>
       <div className="requests-grid">
@@ -310,7 +364,11 @@ export default function JobWorkspace({
               <button
                 className="text-button"
                 disabled={loading}
-                onClick={() => setVersion((v) => v + 1)}
+                onClick={() =>
+                  activityVersion
+                    ? setActivityVersion((v) => v + 1)
+                    : setVersion((v) => v + 1)
+                }
               >
                 다시 연결
               </button>
@@ -321,9 +379,20 @@ export default function JobWorkspace({
               아직 저장한 업무가 없습니다. 새 업무 요청을 작성해 보세요.
             </p>
           )}
+          <button
+            className="text-button"
+            disabled={loading || saving || moreLoading}
+            onClick={() => setActivityVersion((v) => v + 1)}
+          >
+            집계·검토 상태 새로고침
+          </button>
+          <p className="session-note">
+            진행 중 전체 건수와 첨부별 최근 실행의 검토 기록입니다. 상태
+            새로고침은 열어 둔 결과·검토 의견을 유지합니다.
+          </p>
           <ul className="saved-job-list">
             {jobs.map((job) => (
-              <li key={job.id}>
+              <li key={job.id} data-job-id={job.id}>
                 <button
                   aria-pressed={selected === job.id}
                   onClick={() => select(job.id)}
@@ -336,7 +405,21 @@ export default function JobWorkspace({
                     {TASKS.find((task) => task.id === job.kind)?.title} ·{" "}
                     {date(job.createdAt)}
                   </small>
+                  <JobActivity activity={job.activity} compact />
                 </button>
+                {!!job.activity?.latest.length && (
+                  <button
+                    className="text-button activity-open"
+                    onClick={() =>
+                      select(job.id, {
+                        fileId: job.activity!.latest[0]!.fileId,
+                        runId: job.activity!.latest[0]!.runId,
+                      })
+                    }
+                  >
+                    {job.title} 최근 집계·검토 보기
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -392,8 +475,25 @@ export default function JobWorkspace({
                       {detail.job.instructions}
                     </dd>
                   </dl>
+                  <section
+                    className="job-activity-detail"
+                    aria-label="업무 집계·검토 현황"
+                  >
+                    <h4>집계·검토 현황</h4>
+                    <JobActivity
+                      activity={
+                        jobs.find((job) => job.id === detail.job.id)
+                          ?.activity ?? detail.job.activity
+                      }
+                      onOpen={(fileId, runId) =>
+                        select(detail.job.id, { fileId, runId })
+                      }
+                    />
+                  </section>
                   <Attachments
                     key={detail.job.id}
+                    target={target}
+                    onActivityChange={() => setActivityVersion((v) => v + 1)}
                     jobId={detail.job.id}
                     accountId={accountId}
                     onUnauthorized={onUnauthorized}

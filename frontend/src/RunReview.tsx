@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useId } from "react";
 import { jobsApi, ApiError } from "./jobsApi";
 interface ReviewState {
   targetHash: string;
@@ -19,11 +19,13 @@ export default function RunReview({
   accountId,
   expectedTargetHash,
   onUnauthorized,
+  onActivityChange,
 }: {
   base: string;
   accountId: string;
   expectedTargetHash: string;
   onUnauthorized: () => void;
+  onActivityChange?: () => void;
 }) {
   const [state, setState] = useState<ReviewState | null>(null),
     [error, setError] = useState(""),
@@ -31,6 +33,8 @@ export default function RunReview({
     [decision, setDecision] = useState<"approved" | "rejected">("approved"),
     [comment, setComment] = useState(""),
     [confirmed, setConfirmed] = useState(false);
+  const decisionId = useId(),
+    commentId = useId();
   const controller = useRef<AbortController | null>(null),
     request = useRef<{ key: string; payload: string } | null>(null),
     unauthorized = useRef(onUnauthorized);
@@ -112,6 +116,7 @@ export default function RunReview({
         body: payload,
         signal: controller.current.signal,
       });
+      onActivityChange?.();
       await load(controller.current.signal);
       request.current = null;
     } catch (e) {
@@ -119,6 +124,7 @@ export default function RunReview({
       if (e instanceof ApiError && e.status === 409)
         try {
           await load(controller.current.signal);
+          onActivityChange?.();
         } catch (refreshError) {
           fail(refreshError);
         }
@@ -183,9 +189,10 @@ export default function RunReview({
               <p className="session-note">
                 검토 대기 · 대상 SHA-256: {state.targetHash}
               </p>
-              <label>
-                검토 결정
+              <div>
+                <label htmlFor={decisionId}>검토 결정</label>
                 <select
+                  id={decisionId}
                   value={decision}
                   disabled={busy}
                   onChange={(e) => {
@@ -196,10 +203,13 @@ export default function RunReview({
                   <option value="approved">승인</option>
                   <option value="rejected">반려</option>
                 </select>
-              </label>
-              <label>
-                검토 의견{decision === "rejected" ? " (필수)" : " (선택)"}
+              </div>
+              <div>
+                <label htmlFor={commentId}>
+                  검토 의견{decision === "rejected" ? " (필수)" : " (선택)"}
+                </label>
                 <textarea
+                  id={commentId}
                   value={comment}
                   maxLength={2000}
                   required={decision === "rejected"}
@@ -209,7 +219,7 @@ export default function RunReview({
                     setConfirmed(false);
                   }}
                 />
-              </label>
+              </div>
               <label>
                 <input
                   type="checkbox"

@@ -2360,3 +2360,34 @@ h1 {
 .review-comment {
   white-space: pre-wrap;
 }
+
+.job-activity,
+.job-activity > span {
+  display: block;
+}
+.job-activity {
+  margin: 10px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.job-activity .activity-progress {
+  color: #245845;
+  font-weight: 600;
+}
+.job-activity .activity-file {
+  display: grid;
+  padding: 8px 0;
+  border-top: 1px solid #dbe5df;
+}
+.saved-job-list .activity-open {
+  width: auto;
+  padding: 4px 12px;
+  margin: 0 8px 8px;
+  font-size: 12px;
+}
+.job-activity-detail,
+.linked-summary {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

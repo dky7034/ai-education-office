@@ -33,11 +33,13 @@ export default function FilePreview({
   fileId,
   accountId,
   onUnauthorized,
+  onActivityChange,
 }: {
   jobId: string;
   fileId: string;
   accountId: string;
   onUnauthorized: () => void;
+  onActivityChange?: () => void;
 }) {
   const [result, setResult] = useState<Result | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null),
@@ -331,6 +333,7 @@ export default function FilePreview({
             </p>
           )}
           <BackgroundSummary
+            onActivityChange={onActivityChange}
             jobId={jobId}
             fileId={fileId}
             accountId={accountId}
