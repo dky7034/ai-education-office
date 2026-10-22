@@ -92,7 +92,7 @@ codex app-server generate-ts --out /tmp/ai-office-codex-protocol
 
 프로토콜 타입 생성은 성공했습니다. 생성물은 조사용 `/tmp`에만 두며 앱에 연동하지 않았습니다. CLI 도움말의 App Server 및 타입 생성 기능에는 `[experimental]` 표시가 있습니다. 따라서 지원되는 공식 인터페이스가 존재한다는 사실과, 모든 버전에서 호환성을 보장하는 안정 API라는 주장은 구분해야 합니다. 버전·생성 스키마를 고정하고 업데이트 시 계약 테스트가 필요합니다.
 
-현재 확인한 전송 방식은 `stdio://`(기본), `unix://`/경로, `ws://IP:PORT`, `off`입니다. 2026-10-22에 비공개 stdio 초기화 어댑터를 구현하고 실제 0.163.0 CLI로 초기화 계약을 확인했습니다. 업무·모델 실행은 아직 연결하지 않았습니다. 범위와 검사 명령은 [Codex 어댑터 안내](CODEX_ADAPTER.md)를 따릅니다. CLI에 WebSocket capability-token·signed-bearer-token 관련 옵션이 있지만 브라우저에서 App Server를 직접 공개 접근시키지 않습니다. 외부 연결은 앱 백엔드가 인증·권한 확인 후 필요한 이벤트만 전달합니다.
+현재 확인한 전송 방식은 `stdio://`(기본), `unix://`/경로, `ws://IP:PORT`, `off`입니다. 2026-10-22에 비공개 stdio 초기화 어댑터를 구현하고 실제 0.163.0 CLI로 초기화 계약을 확인했습니다. 이후 단일 텍스트의 명시적 API 키 로그인·thread/turn·중단 흐름을 합성 서버로 검증했습니다. 실제 모델 호출·앱 업무·큐에는 아직 연결하지 않았습니다. 범위와 검사 명령은 [Codex 어댑터 안내](CODEX_ADAPTER.md)를 따릅니다. CLI에 WebSocket capability-token·signed-bearer-token 관련 옵션이 있지만 브라우저에서 App Server를 직접 공개 접근시키지 않습니다. 외부 연결은 앱 백엔드가 인증·권한 확인 후 필요한 이벤트만 전달합니다.
 
 생성된 프로토콜에서 `initialize` → `initialized`, `thread/start`, `turn/start` 요청과 `turn/started`, `item/started`, `item/completed`, `turn/completed`, 승인 관련 서버 요청을 확인했습니다. 후속 어댑터는 요청 ID와 thread/turn/job ID를 매핑하고 비동기 알림·서버 요청에 각각 응답해야 합니다. 완료 알림 수신만으로 산출물의 유효성을 확정하지 않으며 turn 오류 상태 및 파일 검증을 함께 확인합니다.
 

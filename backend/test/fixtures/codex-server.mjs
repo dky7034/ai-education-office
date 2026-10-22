@@ -2,7 +2,9 @@
 import { createInterface } from 'node:readline';
 import { appendFileSync } from 'node:fs';
 import { config } from './config.mjs';
+import { executionMessage } from './codex-execution.mjs';
 if (config.mode === 'version-hang' && process.argv.includes('--version')) {
+  appendFileSync(config.observations, JSON.stringify({ event: 'version' }) + '\n');
   process.on('SIGTERM', () => {});
   setInterval(() => {}, 1000);
 } else if (process.argv.includes('--version')) {
@@ -21,7 +23,14 @@ const respond = () => send({ id: 1, result: result() });
 if (config.mode === 'stubborn') process.on('SIGTERM', () => {});
 createInterface({ input: process.stdin }).on('line', (line) => {
   const message = JSON.parse(line);
-  appendFileSync(config.observations, JSON.stringify({ event: 'message', message }) + '\n');
+  const observed = message.method === 'account/login/start'
+    ? { ...message, params: { type: message.params?.type, apiKey: '[REDACTED]' } }
+    : message.method === 'turn/start'
+      ? { ...message, params: { ...message.params, input: '[REDACTED]' } } : message;
+  appendFileSync(config.observations, JSON.stringify({ event: 'message', message: observed }) + '\n');
+  if (config.mode.startsWith('exec-') && message.method !== 'initialize') {
+    executionMessage(message, config, send); return;
+  }
   if (message.method === 'initialized' && config.mode === 'crash-ready') process.exit(1);
   if (message.id === 'tool' && message.error?.code === -32601) respond();
   if (message.method !== 'initialize') return;

@@ -1,4 +1,5 @@
 import { CodexConnection, CodexConnectionError } from "../backend/src/codex/connection.ts";
+import { isAccount } from "../backend/src/codex/executionProtocol.ts";
 import { CODEX_VERSION } from "../backend/src/codex/protocol.ts";
 
 const executable = process.env.OFFICE_CODEX_BIN;
@@ -10,7 +11,9 @@ if (!executable) {
   try {
     connection = new CodexConnection({ executable });
     await connection.start();
-    console.log(`Codex ${CODEX_VERSION}: 격리된 stdio 초기화 계약 통과 (AI 호출 없음)`);
+    const auth = await connection.request("account/read", { refreshToken: false }, isAccount);
+    if (auth.account !== null) throw new CodexConnectionError("configuration");
+    console.log(`Codex ${CODEX_VERSION}: 격리된 stdio 초기화·미인증 계약 통과 (AI 호출 없음)`);
   } catch (error) {
     console.error(error instanceof CodexConnectionError ? error.message : "Codex 검사 실패");
     process.exitCode = 1;

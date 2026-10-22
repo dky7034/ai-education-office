@@ -10,6 +10,7 @@ async function fixture(mode = 'ok', timeoutMs = 2000) {
   const root = await mkdtemp(join(tmpdir(), 'office-codex-fixture-'));
   const executable = join(root, 'codex.mjs'), observations = join(root, 'observations.jsonl');
   await copyFile(new URL('./fixtures/codex-server.mjs', import.meta.url), executable);
+  await copyFile(new URL('./fixtures/codex-execution.mjs', import.meta.url), join(root, 'codex-execution.mjs'));
   const source = await readFile(executable, 'utf8');
   await writeFile(executable, `#!${process.execPath}\n${source}`);
   await chmod(executable, 0o700);
@@ -141,4 +142,19 @@ test('Codex close after initialize was sent cancels its pending response', async
   const rows = await f.observations();
   assert.equal(rows.filter((row) => row.message?.method === 'initialize').length, 1);
   await assert.rejects(access(rows[0].cwd));
+});
+
+
+test('Codex close cancels the version process immediately without waiting for its deadline', { timeout: 2000 }, async (t) => {
+  const f = await fixture('version-hang', 5000); t.after(() => f.cleanup());
+  const pending = f.connection.start();
+  const rejected = assert.rejects(pending, code('closed'));
+  let observed = false;
+  for (let i = 0; i < 200; i++) {
+    if ((await f.observations().catch(() => [])).some((row) => row.event === 'version')) { observed = true; break; }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.equal(observed, true);
+  await f.connection.close();
+  await rejected;
 });
