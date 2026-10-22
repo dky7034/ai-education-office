@@ -10,6 +10,7 @@ export function summarize(
   bytes: Buffer,
   xml: Map<string, string> | null,
   selection: SummaryInput,
+  options: { fullValues?: boolean; frequencyLimit?: number } = {},
 ) {
   const indexes = [...selection.columns].sort((a, b) => a - b);
   if (
@@ -74,7 +75,7 @@ export function summarize(
       const all = [...stat.frequencies].sort(
         (a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0),
       );
-      const shown = all.slice(0, FREQUENCY_LIMIT);
+      const shown = all.slice(0, options.frequencyLimit ?? FREQUENCY_LIMIT);
       const { frequencies: _frequencies, ...counts } = stat;
       const column = table.columns.find((c) => c.index === stat.index)!;
       return {
@@ -83,8 +84,8 @@ export function summarize(
         label: column.label,
         distinctCount: all.length,
         frequencies: shown.map(([value, count]) => ({
-          value: value.slice(0, 200),
-          valueTruncated: value.length > 200,
+          value: options.fullValues ? value : value.slice(0, 200),
+          valueTruncated: !options.fullValues && value.length > 200,
           count,
         })),
         otherDistinctCount: all.length - shown.length,

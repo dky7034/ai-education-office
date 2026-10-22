@@ -2,6 +2,7 @@ import express, { type RequestHandler } from "express";
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { readXlsx, MAX_FILE_BYTES } from "./attachments.ts";
+import { summaryCsv } from "./summaryCsv.ts";
 import { summarize } from "./summary.ts";
 import { tablePreview, PreviewError } from "./tabular.ts";
 import { ConflictError, type Store, type Attachment } from "./store.ts";
@@ -177,64 +178,93 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
       errorResponse(error, res, next);
     }
   });
-  router.post(path + "/summary", async (req, res, next) => {
-    const item = res.locals.attachment as Attachment,
-      body = req.body;
-    if (
-      !body ||
-      Array.isArray(body) ||
-      Object.keys(body).some((key) => key !== "revision") ||
-      !Number.isSafeInteger(body.revision) ||
-      body.revision < 1
-    ) {
-      res.status(400).json({ error: "저장한 열 선택 버전을 확인해 주세요." });
-      return;
-    }
-    try {
-      const selection = store.selection(
-        res.locals.account.id,
-        item.jobId,
-        item.id,
-      );
+  router.post(
+    [path + "/summary", path + "/summary.csv"],
+    async (req, res, next) => {
+      const csv = req.path.endsWith("/summary.csv");
+      const item = res.locals.attachment as Attachment,
+        body = req.body;
       if (
-        !selection ||
-        selection.revision !== body.revision ||
-        selection.sourceHash !== item.sha256
-      )
-        throw new ConflictError();
-      const data = await original(store, item);
-      let xml: Map<string, string> | null = null;
-      try {
-        if (item.format === "xlsx") xml = await readXlsx(data);
-      } catch {
-        throw new PreviewError("XLSX 구조를 읽지 못했습니다.");
+        !body ||
+        Array.isArray(body) ||
+        Object.keys(body).some((key) => key !== "revision") ||
+        !Number.isSafeInteger(body.revision) ||
+        body.revision < 1
+      ) {
+        res.status(400).json({ error: "저장한 열 선택 버전을 확인해 주세요." });
+        return;
       }
-      const summary = summarize(item.format, data, xml, selection);
-      requireAccount(req, res, () => {
-        const latest = store.selection(
+      try {
+        const selection = store.selection(
           res.locals.account.id,
           item.jobId,
           item.id,
         );
         if (
-          latest?.revision !== selection.revision ||
-          latest.sourceHash !== item.sha256
-        ) {
-          errorResponse(new ConflictError(), res, next);
-          return;
+          !selection ||
+          selection.revision !== body.revision ||
+          selection.sourceHash !== item.sha256
+        )
+          throw new ConflictError();
+        const data = await original(store, item);
+        let xml: Map<string, string> | null = null;
+        try {
+          if (item.format === "xlsx") xml = await readXlsx(data);
+        } catch {
+          throw new PreviewError("XLSX 구조를 읽지 못했습니다.");
         }
-        res.json({
-          summary: {
-            ...summary,
-            revision: selection.revision,
-            sourceHash: item.sha256,
-            calculatedAt: new Date().toISOString(),
-          },
+        const summary = summarize(
+          item.format,
+          data,
+          xml,
+          selection,
+          csv ? { fullValues: true, frequencyLimit: Infinity } : {},
+        );
+        const calculatedAt = new Date().toISOString();
+        const output = csv
+          ? summaryCsv(summary, {
+              jobId: item.jobId,
+              fileId: item.id,
+              filename: item.name,
+              sourceHash: item.sha256,
+              revision: selection.revision,
+              calculatedAt,
+            })
+          : null;
+        requireAccount(req, res, () => {
+          const latest = store.selection(
+            res.locals.account.id,
+            item.jobId,
+            item.id,
+          );
+          if (
+            latest?.revision !== selection.revision ||
+            latest.sourceHash !== item.sha256
+          ) {
+            errorResponse(new ConflictError(), res, next);
+            return;
+          }
+          if (output) {
+            res.set({
+              "Content-Type": "text/csv; charset=utf-8",
+              "Content-Disposition": `attachment; filename="office-summary-${item.id}.csv"`,
+            });
+            res.send(output);
+            return;
+          }
+          res.json({
+            summary: {
+              ...summary,
+              revision: selection.revision,
+              sourceHash: item.sha256,
+              calculatedAt,
+            },
+          });
         });
-      });
-    } catch (error) {
-      errorResponse(error, res, next);
-    }
-  });
+      } catch (error) {
+        errorResponse(error, res, next);
+      }
+    },
+  );
   return router;
 }

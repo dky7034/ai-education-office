@@ -72,3 +72,5 @@ XLSX/CSV 첨부·다운로드는 [첨부 안내](../docs/ATTACHMENTS.md)에 정�
 v4는 열 선택용 column_selections 테이블을 추가합니다. 미리보기·열 선택 API는 [미리보기 안내](../docs/FILE_PREVIEW.md)에 정리했습니다.
 
 저장된 선택 버전으로 원본 전체를 계산하는 집계 API는 [기초 집계 안내](../docs/BASIC_SUMMARY.md)를 따릅니다. 집계 결과는 별도 DB 저장 없이 반환하며 스키마 v4는 유지합니다.
+
+전체 빈도 CSV는 `POST /api/jobs/:id/attachments/:fileId/summary.csv`로 같은 저장 버전과 원본을 재검증해 내려줍니다. 출력 형식·텍스트 보호·20MiB 제한은 [기초 집계 안내](../docs/BASIC_SUMMARY.md)를 따릅니다.

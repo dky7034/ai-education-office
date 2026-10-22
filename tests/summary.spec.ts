@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { csvRows } from "../backend/src/csv";
 import { expect, test, type Page } from "@playwright/test";
 import { registerViaApi } from "./accountHelpers";
 import { xlsxFixture } from "../backend/test/xlsxFixture";
@@ -155,4 +157,52 @@ test("XLSX 빈 행·수식·오류 제외 건수와 값별 빈도 표시", async
     panel.getByRole("cell", { name: "가상 의견", exact: true }),
   ).toBeVisible();
   await expect(panel).toContainText("선택 버전 1");
+});
+
+test("CSV 다운로드·연결 실패 재시도·전체 빈도·오래된 선택 차단", async ({
+  page,
+}) => {
+  const { panel, base } = await attach(
+    page,
+    "합성 결과.csv",
+    Buffer.from("A\n=1+1\n가상\n가상\n"),
+    [0],
+  );
+  await panel
+    .getByRole("button", { name: "전체 데이터 집계", exact: true })
+    .click();
+  const button = panel.getByRole("button", {
+    name: "전체 빈도 CSV 다운로드",
+    exact: true,
+  });
+  await expect(button).toBeEnabled();
+  let fail = true;
+  await page.route("**" + base + "/summary.csv", async (route) => {
+    if (fail) {
+      fail = false;
+      await route.abort();
+    } else await route.continue();
+  });
+  await button.click();
+  await expect(panel.getByRole("alert")).toContainText("연결");
+  const event = page.waitForEvent("download");
+  await button.click();
+  const download = await event;
+  expect(download.suggestedFilename()).toMatch(/^office-summary-.*\.csv$/);
+  const data = await readFile((await download.path())!);
+  const rows = [...csvRows(data)];
+  expect(
+    rows.some((r) => r[0] === "값별 빈도" && r[4] === "'=1+1" && r[5] === "1"),
+  ).toBeTruthy();
+  expect(
+    rows.some((r) => r[0] === "값별 빈도" && r[4] === "'가상" && r[5] === "2"),
+  ).toBeTruthy();
+  const saved = await page.request.put(base + "/selection", {
+    headers: { "X-Office-Request": "1" },
+    data: { sheetId: "csv", headerRow: 1, columns: [0], revision: 1 },
+  });
+  expect(saved.status()).toBe(200);
+  await button.click();
+  await expect(panel.getByRole("alert")).toContainText("다른 화면");
+  await expect(panel.locator(".summary-results")).toHaveCount(0);
 });

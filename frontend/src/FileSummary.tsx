@@ -38,6 +38,7 @@ export default function FileSummary({
 }) {
   const [summary, setSummary] = useState<Summary | null>(null),
     [busy, setBusy] = useState(false),
+    [exporting, setExporting] = useState(false),
     [error, setError] = useState("");
   const alive = useRef(true),
     abort = useRef(new AbortController());
@@ -50,7 +51,7 @@ export default function FileSummary({
     };
   }, []);
   async function run() {
-    if (busy) return;
+    if (busy || exporting) return;
     setBusy(true);
     setError("");
     setSummary(null);
@@ -73,6 +74,52 @@ export default function FileSummary({
       );
     } finally {
       if (alive.current) setBusy(false);
+    }
+  }
+  async function download() {
+    if (busy || exporting || !summary) return;
+    setExporting(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/jobs/${jobId}/attachments/${fileId}/summary.csv`,
+        {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Office-Request": "1",
+            "X-Office-Account": accountId,
+          },
+          signal: abort.current.signal,
+          body: JSON.stringify({ revision }),
+        },
+      );
+      if (!response.ok) {
+        const data = await response.json();
+        throw new ApiError(data.error, response.status);
+      }
+      if (!response.headers.get("content-type")?.includes("text/csv"))
+        throw new Error();
+      const blob = await response.blob();
+      if (!alive.current) return;
+      const url = URL.createObjectURL(blob),
+        link = document.createElement("a");
+      link.href = url;
+      link.download = `office-summary-${fileId}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (error) {
+      if (!alive.current) return;
+      if (error instanceof ApiError && error.status === 401) onUnauthorized();
+      if (error instanceof ApiError && error.status === 409) setSummary(null);
+      setError(
+        error instanceof ApiError
+          ? error.message
+          : "CSV를 내려받지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
+      );
+    } finally {
+      if (alive.current) setExporting(false);
     }
   }
   return (
@@ -104,7 +151,11 @@ export default function FileSummary({
           </li>
         </ul>
       </details>
-      <button className="primary-button" disabled={busy} onClick={run}>
+      <button
+        className="primary-button"
+        disabled={busy || exporting}
+        onClick={run}
+      >
         {busy ? "집계 중…" : "전체 데이터 집계"}
       </button>
       {busy && (
@@ -117,6 +168,17 @@ export default function FileSummary({
       )}
       {summary && (
         <div className="summary-results" aria-label="기초 집계 결과">
+          <button
+            className="secondary-button"
+            disabled={busy || exporting}
+            onClick={download}
+          >
+            {exporting ? "CSV 생성 중…" : "전체 빈도 CSV 다운로드"}
+          </button>
+          <p className="session-note">
+            저장한 원본과 선택 버전을 다시 확인해 전체 빈도를 내보냅니다. 수식
+            주입을 막기 위해 CSV 텍스트 앞에는 작은따옴표가 추가됩니다.
+          </p>
           <p className="session-note">
             {summary.sheetName} · 제목 {summary.headerRow}행 · 선택 버전{" "}
             {summary.revision} ·{" "}
