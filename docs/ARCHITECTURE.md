@@ -129,3 +129,5 @@ Phase 1·2는 `npm ci && npm run build`로 생성한 `frontend/dist`를 정적 �
 v6의 파일별 정량 집계는 API 서버가 관리하는 단일 Node worker_threads와 SQLite의 summary_runs / summary_run_events / summary_queue_lease를 사용합니다. 설정 스냅샷·원본 해시·상태 전이·소유권으로 결과 저장을 보호하고 완료된 요약 JSON을 보존합니다. Python/Codex 실행기는 아직 연결하지 않았으며 jobs의 접수 상태와 오피스 시뮬레이션은 변경하지 않습니다. 기존 CSV/HTML/XLSX는 현재 설정으로 계산하는 동기 다운로드입니다. 자세한 계약은 [백그라운드 집계 안내](BACKGROUND_SUMMARY.md)에 있습니다.
 
 v7은 실행별 파일 메타데이터를 추가하고 완료 요약·메타데이터·이벤트를 한 트랜잭션으로 확정합니다. 파일의 fsync·검증·rename과 DB 확정 사이의 중단은 lease 획득 후 정리로 복구합니다. 다운로드는 현재 설정을 계산하지 않고 당시 파일 크기·해시·세션을 확인합니다. [실행 결과 파일 안내](RUN_ARTIFACTS.md)를 따릅니다.
+
+v8은 실행당 한 번의 승인/반려와 대상 매니페스트를 summary_run_reviews에 보관합니다. 표시 결과와 파일 3종을 해시로 연결하고 무결성·세션·소유권·중복 결정을 검사합니다. jobs 접수 상태 및 시뮬레이션은 변경하지 않습니다. [결과 검토 안내](RESULT_REVIEW.md)를 따릅니다.

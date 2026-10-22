@@ -1,6 +1,8 @@
+import { publicReview, type ReviewInput } from "./reviewStore.ts";
 import express, { type RequestHandler } from "express";
 import {
   ARTIFACT_FORMATS,
+  validArtifacts,
   ARTIFACT_MIME,
   ArtifactError,
   REPORT_CSP,
@@ -85,6 +87,134 @@ export function runRoutes(store: Store, requireAccount: RequestHandler) {
       else next(error);
     }
   });
+  async function verifyReviewFiles(
+    id: string,
+    context: NonNullable<ReturnType<Store["reviewContext"]>>,
+  ) {
+    if (!validArtifacts(context.artifacts))
+      return "보관 파일 3종이 있는 완료 결과만 검토할 수 있습니다. 새 집계 작업을 접수해 주세요.";
+    for (const artifact of context.artifacts)
+      await readArtifact(
+        outputFile(store.outputRoot, id, artifact.format),
+        artifact,
+      );
+    return null;
+  }
+  router.get(base + "/:runId/review", async (req, res, next) => {
+    const id = String(req.params.runId);
+    try {
+      const context = uuid.test(id)
+        ? store.reviewContext(...scope(req, res), id)
+        : null;
+      if (!context) {
+        res.status(404).json({ error: "집계 작업을 찾을 수 없습니다." });
+        return;
+      }
+      let problem: string | null = null;
+      try {
+        problem = await verifyReviewFiles(id, context);
+      } catch (error) {
+        if (error instanceof ArtifactError) problem = error.message;
+        else throw error;
+      }
+      requireAccount(req, res, () => {
+        const latest = store.reviewContext(...scope(req, res), id);
+        if (!latest) {
+          res.status(404).json({ error: "집계 작업을 찾을 수 없습니다." });
+          return;
+        }
+        if (latest.targetHash !== context.targetHash)
+          problem =
+            "검토 대상이 변경되었습니다. 검토 상태를 새로고침해 주세요.";
+        res.json({
+          targetHash: latest.targetHash,
+          reviewable: !problem,
+          problem,
+          decision: latest.review
+            ? {
+                ...publicReview(latest.review),
+                valid:
+                  !problem && latest.review.targetHash === latest.targetHash,
+              }
+            : null,
+        });
+      });
+    } catch (error) {
+      if (error instanceof RunError)
+        res.status(error.status).json({ error: error.message });
+      else next(error);
+    }
+  });
+  router.post(base + "/:runId/review", async (req, res, next) => {
+    const id = String(req.params.runId),
+      input = req.body,
+      key = req.get("idempotency-key");
+    if (
+      !input ||
+      Array.isArray(input) ||
+      Object.keys(input).some(
+        (k) => !["targetHash", "decision", "comment"].includes(k),
+      ) ||
+      !["approved", "rejected"].includes(input.decision) ||
+      typeof input.targetHash !== "string" ||
+      !/^[a-f0-9]{64}$/.test(input.targetHash) ||
+      typeof input.comment !== "string" ||
+      input.comment.length > 2000 ||
+      input.comment !== input.comment.trim() ||
+      (input.decision === "rejected" && !input.comment) ||
+      !key ||
+      !/^[A-Za-z0-9_-]{8,100}$/.test(key)
+    ) {
+      res.status(400).json({
+        error:
+          "검토 대상·결정·요청 식별자를 확인해 주세요. 의견은 앞뒤 공백 없이 2,000자 이하이며 반려 사유는 필수입니다.",
+      });
+      return;
+    }
+    try {
+      const context = uuid.test(id)
+        ? store.reviewContext(...scope(req, res), id)
+        : null;
+      if (!context) {
+        res.status(404).json({ error: "집계 작업을 찾을 수 없습니다." });
+        return;
+      }
+      // A lost response may be replayed even if the files later become unavailable.
+      if (context.review?.requestKey !== key) {
+        if (context.review)
+          throw new RunError(
+            409,
+            "이미 검토 결정이 확정되었습니다. 최신 검토 상태를 확인해 주세요.",
+          );
+        if (context.targetHash !== input.targetHash)
+          throw new RunError(
+            409,
+            "검토 대상이 변경되었습니다. 결과와 파일을 다시 확인해 주세요.",
+          );
+        const problem = await verifyReviewFiles(id, context);
+        if (problem) throw new RunError(409, problem);
+      }
+      requireAccount(req, res, () => {
+        const result = store.decideSummaryRun(
+          ...scope(req, res),
+          id,
+          key,
+          input as ReviewInput,
+        );
+        if (!result) {
+          res.status(404).json({ error: "집계 작업을 찾을 수 없습니다." });
+          return;
+        }
+        res.status(result.replayed ? 200 : 201).json(result);
+      });
+    } catch (error) {
+      if (error instanceof ArtifactError)
+        res.status(409).json({ error: error.message });
+      else if (error instanceof RunError)
+        res.status(error.status).json({ error: error.message });
+      else next(error);
+    }
+  });
   router.get(base + "/:runId/artifacts/:format", async (req, res, next) => {
     const id = String(req.params.runId),
       format = String(req.params.format) as ArtifactFormat;
@@ -145,6 +275,8 @@ export function runRoutes(store: Store, requireAccount: RequestHandler) {
         req.path.endsWith("/result")
           ? {
               summary: result,
+              reviewTargetHash: store.reviewContext(...scope(req, res), id)
+                ?.targetHash,
               artifacts: store.summaryRunArtifacts(...scope(req, res), id),
             }
           : result,

@@ -1,3 +1,4 @@
+import { REVIEW_SCHEMA, reviewRepository } from "./reviewStore.ts";
 import { ARTIFACT_SCHEMA } from "./runArtifacts.ts";
 import { runRepository, RUN_SCHEMA } from "./runStore.ts";
 import type { SurveyQuestion } from "./survey.ts";
@@ -105,7 +106,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 7) {
+  if (version > 8) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -178,9 +179,11 @@ export function createStore(
   `);
   if (version < 6) db.exec(RUN_SCHEMA);
   if (version < 7) db.exec(ARTIFACT_SCHEMA);
+  if (version < 8) db.exec(REVIEW_SCHEMA);
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
     ...runRepository(db),
+    ...reviewRepository(db),
     outputRoot,
     selection(
       account: string,

@@ -718,3 +718,219 @@ test("백그라운드 집계 응답 유실 재시도·실제 워커 완료·저�
     ),
   ).toBe(true);
 });
+
+test("실행 결과 승인·응답 유실 재시도·새로고침 보존·새 실행 반려와 충돌 복원", async ({
+  page,
+}) => {
+  const { base } = await attach(
+    page,
+    "합성 검토.csv",
+    Buffer.from("A\n1\n3\n"),
+    [0],
+  );
+  const queue = page.getByRole("region", {
+    name: "백그라운드 집계 작업",
+    exact: true,
+  });
+  const enqueue = queue.getByRole("button", {
+    name: "백그라운드 집계 접수",
+    exact: true,
+  });
+  await enqueue.click();
+  let row = queue.locator(".summary-run-list > li").first();
+  await expect(row.locator("strong")).toHaveText("완료");
+  await row
+    .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
+    .click();
+  const review = page.getByRole("region", { name: "결과물 검토", exact: true });
+  const approve = review.getByRole("button", {
+    name: "승인 확정",
+    exact: true,
+  });
+  await expect(approve).toBeDisabled();
+  await expect(review.getByRole("form")).toBeVisible();
+  await expect(review.getByRole("alert")).toHaveCount(0);
+  await review
+    .getByLabel("검토 의견 (선택)", { exact: true })
+    .fill("합성 결과 <script>문자</script> 확인");
+  await review
+    .getByLabel("이 실행 결과와 보관 파일을 확인했습니다", { exact: true })
+    .check();
+  let lose = true;
+  await page.route("**" + base + "/runs/*/review", async (route) => {
+    if (route.request().method() === "POST" && lose) {
+      lose = false;
+      const response = await route.fetch();
+      expect(response.status()).toBe(201);
+      await route.abort();
+    } else await route.continue();
+  });
+  await approve.click();
+  await expect(review.getByRole("alert")).toContainText("연결");
+  await approve.click();
+  await expect(review.locator(".review-decision strong")).toHaveText(
+    "승인 확정",
+  );
+  await expect(review.locator(".review-comment")).toContainText(
+    "<script>문자</script>",
+  );
+  expect(await review.locator("script").count()).toBe(0);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "합성 검토.csv 미리보기", exact: true })
+    .click();
+  await queue
+    .locator(".summary-run-list > li")
+    .first()
+    .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
+    .click();
+  await expect(review.locator(".review-decision strong")).toHaveText(
+    "승인 확정",
+  );
+  await expect(review.getByRole("form")).toHaveCount(0);
+  await enqueue.click();
+  await expect(queue.locator(".summary-run-list > li")).toHaveCount(2);
+  row = queue.locator(".summary-run-list > li").first();
+  await expect(row.locator("strong")).toHaveText("완료");
+  await row
+    .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
+    .click();
+  await expect(review.getByRole("form")).toBeVisible();
+  await review
+    .getByRole("combobox", { name: "검토 결정", exact: true })
+    .selectOption("rejected");
+  await review
+    .getByLabel("이 실행 결과와 보관 파일을 확인했습니다", { exact: true })
+    .check();
+  const reject = review.getByRole("button", { name: "반려 확정", exact: true });
+  await expect(reject).toBeDisabled();
+  await review
+    .getByLabel("검토 의견 (필수)", { exact: true })
+    .fill("합성 문항 설정을 다시 확인");
+  await review
+    .getByLabel("이 실행 결과와 보관 파일을 확인했습니다", { exact: true })
+    .check();
+  // Another screen wins; the pending form must refresh to the existing decision.
+  const runId = await row.getAttribute("data-run-id");
+  const state = await (
+    await page.request.get(base + "/runs/" + runId + "/review")
+  ).json();
+  expect(
+    (
+      await page.request.post(base + "/runs/" + runId + "/review", {
+        headers: {
+          "X-Office-Request": "1",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        data: {
+          targetHash: state.targetHash,
+          decision: "rejected",
+          comment: "다른 화면에서 확정한 합성 반려",
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  await reject.click();
+  await expect(review.getByRole("alert")).toContainText("이미 검토 결정");
+  await expect(review.locator(".review-decision strong")).toHaveText(
+    "반려 확정",
+  );
+  await expect(review.locator(".review-comment")).toContainText(
+    "다른 화면에서 확정한 합성 반려",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("반려 사유·확인 체크 후 반려를 확정하고 보관 파일 변경 시 기존 결정 무효를 안내한다", async ({
+  page,
+}) => {
+  const { base } = await attach(
+    page,
+    "합성 반려.csv",
+    Buffer.from("A\n2\n4\n"),
+    [0],
+  );
+  const queue = page.getByRole("region", {
+    name: "백그라운드 집계 작업",
+    exact: true,
+  });
+  await queue
+    .getByRole("button", { name: "백그라운드 집계 접수", exact: true })
+    .click();
+  const row = queue.locator(".summary-run-list > li").first();
+  await expect(row.locator("strong")).toHaveText("완료");
+  await row
+    .getByRole("button", { name: "저장된 집계 결과 보기", exact: true })
+    .click();
+  const review = page.getByRole("region", { name: "결과물 검토", exact: true });
+  await expect(review.getByRole("form")).toBeVisible();
+  let staleTarget = true;
+  await page.route("**" + base + "/runs/*/review", async (route) => {
+    if (route.request().method() === "GET" && staleTarget) {
+      staleTarget = false;
+      const response = await route.fetch();
+      const value = await response.json();
+      await route.fulfill({
+        response,
+        json: { ...value, targetHash: "0".repeat(64) },
+      });
+    } else await route.continue();
+  });
+  await review
+    .getByRole("button", { name: "검토 상태 새로고침", exact: true })
+    .click();
+  await expect(
+    review.getByText("표시 중인 결과가 변경되었습니다.", { exact: false }),
+  ).toBeVisible();
+  await expect(review.getByRole("form")).toHaveCount(0);
+  await review
+    .getByRole("button", { name: "검토 상태 새로고침", exact: true })
+    .click();
+  await expect(review.getByRole("form")).toBeVisible();
+  await review
+    .getByRole("combobox", { name: "검토 결정", exact: true })
+    .selectOption("rejected");
+  await review
+    .getByLabel("검토 의견 (필수)", { exact: true })
+    .fill("합성 문항 범위 재검토");
+  await review
+    .getByLabel("이 실행 결과와 보관 파일을 확인했습니다", { exact: true })
+    .check();
+  await review.getByRole("button", { name: "반려 확정", exact: true }).click();
+  await expect(review.locator(".review-decision strong")).toHaveText(
+    "반려 확정",
+  );
+  await expect(review.locator(".review-comment")).toContainText(
+    "합성 문항 범위 재검토",
+  );
+  const runId = (await row.getAttribute("data-run-id"))!;
+  // Only this synthetic run's generated file in the isolated browser output root.
+  const { writeFile } = await import("node:fs/promises");
+  const { resolve } = await import("node:path");
+  const directory = process.env.OFFICE_E2E_DB?.endsWith("e2e-dev.sqlite")
+    ? "e2e-dev"
+    : "e2e";
+  await writeFile(
+    resolve("storage/output", directory, runId, "summary.csv"),
+    "합성 변조",
+  );
+  await review
+    .getByRole("button", { name: "검토 상태 새로고침", exact: true })
+    .click();
+  await expect(review.getByRole("alert")).toContainText(
+    "기존 결정이 현재 파일에 유효하지 않습니다",
+  );
+  await expect(review.locator(".review-decision strong")).toHaveText(
+    "반려 확정",
+  );
+  await expect(review.getByRole("form")).toHaveCount(0);
+  expect(
+    (
+      await page.request.get(base + "/runs/" + runId + "/artifacts/csv")
+    ).status(),
+  ).toBe(409);
+});

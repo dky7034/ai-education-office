@@ -2324,3 +2324,39 @@ h1 {
 .stored-summary h5 {
   margin-bottom: 10px;
 }
+
+.run-review {
+  border: 1px solid #b6cbbd;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 16px 0;
+  overflow-wrap: anywhere;
+}
+.run-review form {
+  display: grid;
+  gap: 12px;
+}
+.run-review form label {
+  display: grid;
+  gap: 6px;
+}
+.run-review select,
+.run-review textarea {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  padding: 8px;
+  border: 1px solid #819b8b;
+  border-radius: 6px;
+}
+.run-review textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+.run-review form label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: start;
+}
+.review-comment {
+  white-space: pre-wrap;
+}

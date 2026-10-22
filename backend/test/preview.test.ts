@@ -273,7 +273,7 @@ test("원본 변조는 미리보기·열 선택 저장을 차단한다", async (
     await f.cleanup();
   }
 });
-test("v3에서 첨부·계정·업무·이벤트를 보존하며 v7로 추가 마이그레이션한다", async () => {
+test("v3에서 첨부·계정·업무·이벤트를 보존하며 v8로 추가 마이그레이션한다", async () => {
   let userId = "",
     jobId = "",
     fileId = "";
@@ -304,7 +304,7 @@ test("v3에서 첨부·계정·업무·이벤트를 보존하며 v7로 추가 �
       ).attachment.id;
       s.close();
       const db = new DatabaseSync(filename);
-      db.exec("DROP TABLE summary_run_artifacts; DROP TABLE summary_run_events; DROP TABLE summary_runs; DROP TABLE summary_queue_lease; DROP TABLE column_selections; PRAGMA user_version=3;");
+      db.exec("DROP TABLE summary_run_reviews; DROP TABLE summary_run_artifacts; DROP TABLE summary_run_events; DROP TABLE summary_runs; DROP TABLE summary_queue_lease; DROP TABLE column_selections; PRAGMA user_version=3;");
       db.close();
     },
   });
@@ -322,7 +322,7 @@ test("v3에서 첨부·계정·업무·이벤트를 보존하며 v7로 추가 �
       assert.equal(
         (db.prepare("PRAGMA user_version").get() as { user_version: number })
           .user_version,
-        7,
+        8,
       );
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
     } finally {

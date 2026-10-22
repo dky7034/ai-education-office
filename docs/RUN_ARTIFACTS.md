@@ -26,11 +26,11 @@ v7은 기존 테이블을 유지하고 `summary_run_artifacts`에 실행 ID·형
 
 | 요청 | 응답 |
 | --- | --- |
-| GET `/result` | `{ summary, artifacts: [{ format, size, sha256, createdAt }] }`. 이전 완료 작업은 `artifacts: []` |
+| GET `/result` | `{ summary, reviewTargetHash, artifacts: [{ format, size, sha256, createdAt }] }`. 이전 완료 작업은 `artifacts: []` |
 | GET `/artifacts/csv` | 당시 CSV 바이트 |
 | GET `/artifacts/html` | 당시 HTML 바이트, 제한 CSP |
 | GET `/artifacts/xlsx` | 당시 XLSX 바이트 |
 
 파일명은 `office-run-<run-id>.<format>`입니다. 세션·계정 검증, no-store·nosniff, 첨부 응답을 적용합니다. 비로그인/계정 전환 401, 다른 소유자/업무/첨부/실행·없는 형식/이전 작업의 없는 파일 404, 미완료 또는 보관 파일 무결성 실패 409입니다. 임의 경로·파일명·현재 설정을 다운로드 입력으로 받지 않습니다.
 
-이력·파일 자동 삭제, 전체 디스크 사용량 상한, 운영 백업/복구 자동화는 후속 과제입니다. 작업당 제한은 전체 보관량의 상한이 아닙니다. 사용자 검토·승인, AI 호출이나 외부 발송은 이번 기능에 포함하지 않습니다.
+이력·파일 자동 삭제, 전체 디스크 사용량 상한, 운영 백업/복구 자동화는 후속 과제입니다. 작업당 제한은 전체 보관량의 상한이 아닙니다. 완료 결과의 사용자 검토·승인/반려는 [결과 검토 안내](RESULT_REVIEW.md)를 따릅니다. AI 호출이나 외부 발송은 포함하지 않습니다.

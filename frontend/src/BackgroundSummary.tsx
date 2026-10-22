@@ -1,3 +1,4 @@
+import RunReview from "./RunReview";
 import { useEffect, useRef, useState } from "react";
 import { jobsApi, ApiError } from "./jobsApi";
 import type { Summary } from "./FileSummary";
@@ -53,6 +54,7 @@ export default function BackgroundSummary({
     run: Run;
     summary: Summary;
     artifacts: Artifact[];
+    targetHash: string;
   } | null>(null);
   const mounted = useRef(true),
     abort = useRef(new AbortController()),
@@ -153,15 +155,17 @@ export default function BackgroundSummary({
     setError("");
     setStored(null);
     try {
-      const value = await jobsApi<{ summary: Summary; artifacts: Artifact[] }>(
-        `${base}/${run.id}/result`,
-        { headers, signal: abort.current.signal },
-      );
+      const value = await jobsApi<{
+        summary: Summary;
+        artifacts: Artifact[];
+        reviewTargetHash: string;
+      }>(`${base}/${run.id}/result`, { headers, signal: abort.current.signal });
       if (mounted.current)
         setStored({
           run,
           summary: value.summary,
           artifacts: value.artifacts ?? [],
+          targetHash: value.reviewTargetHash,
         });
     } catch (e) {
       fail(e);
@@ -359,6 +363,13 @@ export default function BackgroundSummary({
               수 있습니다. 파일이 필요하면 새 집계 작업을 접수해 주세요.
             </p>
           )}
+          <RunReview
+            key={stored.run.id}
+            base={`${base}/${stored.run.id}`}
+            accountId={accountId}
+            expectedTargetHash={stored.targetHash}
+            onUnauthorized={onUnauthorized}
+          />
           <dl className="numeric-counts stored-row-counts">
             <dt>제목 이후 전체 행</dt>
             <dd>{stored.summary.totalRows}행</dd>

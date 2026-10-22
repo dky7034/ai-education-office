@@ -43,7 +43,7 @@
 | POST 접두사 | JSON `{ "revision": 1 }`, `Idempotency-Key`로 접수. 신규 202, 재전송 200 |
 | GET 접두사 | `limit` 1~20, `offset` 0 이상. `{ runs, page }` 이력 페이지 |
 | GET `/:runId` | `{ run, events }` 상태·시간·오류와 전환 이력 |
-| GET `/:runId/result` | 완료 시 `{ summary, artifacts }`, 완료 결과 없으면 409 |
+| GET `/:runId/result` | 완료 시 `{ summary, artifacts, reviewTargetHash }`, 완료 결과 없으면 409 |
 | GET `/:runId/artifacts/:format` | 완료 당시 csv/html/xlsx 파일, 무결성 실패 409·없는 파일 404 |
 | POST `/:runId/cancel` | JSON `{}`로 대기/실행 취소. 최종 상태면 그대로 반환 |
 
@@ -54,3 +54,5 @@
 v6는 기존 테이블을 유지하며 `summary_runs`, `summary_run_events`, `summary_queue_lease`를 추가합니다. Node 24의 직접 TypeScript 실행과 빌드 후 JavaScript 워커 경로를 모두 지원합니다. API 서버 정상 종료 시 큐를 먼저 종료한 뒤 DB를 닫습니다.
 
 v7은 기존 실행 요약을 유지하며 파일 메타데이터 테이블을 추가합니다. 과거 완료 실행의 파일은 소급 생성하지 않습니다. DB·입력 원본·출력 파일을 함께 백업하세요.
+
+v8의 실행 결과 승인·반려·해시 연결·검토 이력은 [결과 검토 안내](RESULT_REVIEW.md)를 따릅니다.

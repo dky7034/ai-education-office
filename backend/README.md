@@ -61,11 +61,11 @@ POST 본문 예시:
 
 ## DB와 보존
 
-현재 스키마는 `PRAGMA user_version=7`입니다. v1의 `sessions`, `jobs`, `job_events`를 보존하고 `users`, 세션의 사용자 참조, 업무의 계정 참조·인덱스를 추가합니다. FK·WAL·busy timeout을 사용합니다. DB 파일 권한은 가능한 환경에서 0600, 새 상위 디렉터리는 0700으로 설정합니다. DB는 암호화되지 않습니다. Windows 파일 권한은 별도 점검이 필요합니다.
+현재 스키마는 `PRAGMA user_version=8`입니다. v1의 `sessions`, `jobs`, `job_events`를 보존하고 `users`, 세션의 사용자 참조, 업무의 계정 참조·인덱스를 추가합니다. FK·WAL·busy timeout을 사용합니다. DB 파일 권한은 가능한 환경에서 0600, 새 상위 디렉터리는 0700으로 설정합니다. DB는 암호화되지 않습니다. Windows 파일 권한은 별도 점검이 필요합니다.
 
 설치·빌드·서버 시작 시 DB나 업무를 초기화하지 않습니다. DB·WAL·SHM은 Git에서 제외합니다. 복사는 서버를 정상 종료한 뒤 진행하세요. 온라인 백업·보존 기간·삭제 API는 후속 단계입니다. 테스트는 임시 DB 또는 `database/e2e.sqlite`를 사용해 기본 DB와 분리합니다.
 
-AI 자동 분석, 수정·삭제, 사용자 승인, AI 실행 큐, WebSocket, 실제 AI·Python 처리는 아직 없습니다.
+AI 자동 분석, 수정·삭제, 조직 결재선, AI 실행 큐, WebSocket, 실제 AI·Python 처리는 아직 없습니다.
 
 XLSX/CSV 첨부·다운로드는 [첨부 안내](../docs/ATTACHMENTS.md)에 정리했습니다. v3는 기존 업무·계정을 보존하고 attachments 테이블을 추가합니다.
 
@@ -84,3 +84,5 @@ v5는 기존 열 선택에 `questions_json`을 추가합니다. 선택 버전 �
 v6는 파일별 정량 집계 큐·전환 이벤트·큐 소유권을 추가합니다. 상태·접수/취소/결과 API·재시작·한도는 [백그라운드 집계 안내](../docs/BACKGROUND_SUMMARY.md)를 따릅니다. DB에는 완료 집계값도 저장되므로 DB·입력 원본·출력 파일을 함께 비공개 백업하세요.
 
 v7은 `summary_run_artifacts`를 추가합니다. `OFFICE_OUTPUT_DIR` 기본값은 `storage/output/runs`이며 테스트는 별도 출력 경로를 사용합니다. 실행별 CSV/HTML/XLSX 게시·무결성·이전 기록 처리는 [실행 결과 파일 안내](../docs/RUN_ARTIFACTS.md)를 따릅니다.
+
+v8은 summary_run_reviews를 추가합니다. 실행별 승인·반려·대상 해시·영구 검토 이력·재전송 계약은 [결과 검토 안내](../docs/RESULT_REVIEW.md)를 따릅니다.
