@@ -102,3 +102,6 @@ v10은 AI 텍스트 초안 전용 실행 기록·lease·영구 상태 이력/결
 
 
 v11은 AI 실행별 승인/반려 기록과 불변·소유권·계정 이벤트 트리거를 추가합니다. AI 결과 API의 reviewTargetHash와 GET/POST review 계약·원문/출처 무결성·응답 재생은 [AI 초안 검토 안내](../docs/AI_REVIEW.md)를 따릅니다. 정량 집계 검토와 별개이며 외부 효과를 활성화하지 않습니다.
+
+
+스키마 v11을 유지하면서 목록/상세의 job.aiActivity와 GET /api/jobs/ai-office를 추가했습니다. AI 본문/의견을 읽지 않는 전체 진행/업무별 최근 검토 메타데이터이며 기존 정량 집계와 분리합니다. [AI 현황 안내](../docs/AI_STATUS.md)를 따릅니다.

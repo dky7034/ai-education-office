@@ -1,3 +1,5 @@
+import type { AiOfficeView } from "./aiActivity";
+import { aiActivityLabel } from "./aiActivity";
 import { createStaff, type Staff } from "./simulation";
 export interface OfficeRun {
   runId: string;
@@ -33,6 +35,7 @@ export interface ServerOffice {
 }
 export interface ServerOfficeView {
   accountId: string;
+  ai?: AiOfficeView;
   data: ServerOffice | null;
   error: string;
   verifiedAt: string | null;
@@ -54,7 +57,7 @@ export const runLabel = (run: OfficeRun) =>
       }[run.status];
 export const officeStale = (view: ServerOfficeView) =>
   !view.data || !!view.error || view.connection !== "자동 갱신 연결됨";
-export function serverStaff(view: ServerOfficeView): Staff[] {
+function quantitativeStaff(view: ServerOfficeView): Staff[] {
   const people = createStaff();
   for (const person of people) person.task = "연결된 실제 실행이 없습니다.";
   const analyst = people.find((p) => p.id === "analyst")!,
@@ -91,6 +94,34 @@ export function serverStaff(view: ServerOfficeView): Staff[] {
     lead.task =
       "사용자의 검토를 기다립니다. 캐릭터가 승인하거나 반려하지 않습니다.";
     lead.target = lead.desk;
+  }
+  return people;
+}
+export const aiOfficeStale = (view: ServerOfficeView) => !view.ai?.data || !!view.ai.error || view.connection !== "자동 갱신 연결됨";
+export function serverStaff(view: ServerOfficeView): Staff[] {
+  const people = quantitativeStaff(view);
+  if (!view.ai) return people;
+  const writer = people.find((p) => p.id === "writer")!, lead = people.find((p) => p.id === "lead")!;
+  if (aiOfficeStale(view)) { writer.displayStatus = "AI 기록 확인 필요"; writer.task = "연결 복구 전에는 AI 작업 상태를 표시하지 않습니다."; return people; }
+  const ai = view.ai.data!, run = ai.focus;
+  writer.task = "접수한 AI 텍스트 초안이 없습니다.";
+  if (run) {
+    writer.displayStatus = `${run.mode === "synthetic" ? "합성 기록" : "Codex 기록"} · ${aiActivityLabel(run)}`;
+    writer.task = `${run.jobTitle} · ${writer.displayStatus}${run.mode === "synthetic" ? " · 실제 AI 호출 아님" : ""}`;
+    writer.history = ai.recent.map((r) => `${r.mode === "synthetic" ? "합성" : "Codex"} · ${r.jobTitle} · ${aiActivityLabel(r)}`);
+    if (run.mode === "codex") {
+      if (run.status === "running") { writer.status = "문서 작성 중"; writer.target = writer.desk; }
+      else if (run.status === "completed") {
+        writer.status = run.review === "pending" ? "승인 대기" : "작업 완료";
+        writer.target = run.review === "pending" ? { x: 468, y: 384 } : writer.desk;
+      } else if (["failed", "timed_out", "interrupted"].includes(run.status)) writer.status = "오류 발생";
+    }
+  }
+  if (ai.totals.reviewPending) {
+    const quantitative = officeStale(view) ? 0 : view.data!.totals.reviewPending;
+    lead.status = "승인 대기"; lead.target = lead.desk;
+    lead.displayStatus = quantitative ? `집계 검토 ${quantitative}건 · AI 초안 검토 ${ai.totals.reviewPending}건` : `AI 초안 검토 대기 ${ai.totals.reviewPending}건`;
+    lead.task = "사용자 검토 대기 기록입니다. 합성 기록도 포함하며 캐릭터가 승인하지 않습니다.";
   }
   return people;
 }

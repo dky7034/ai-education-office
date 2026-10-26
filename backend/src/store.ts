@@ -1,3 +1,4 @@
+import { aiActivities, aiOfficeRepository } from "./aiActivity.ts";
 import { AI_REVIEW_SCHEMA, aiReviewRepository } from "./aiReviewStore.ts";
 import { AI_SCHEMA, aiRepository } from "./aiStore.ts";
 import { officeRepository } from "./officeState.ts";
@@ -211,6 +212,7 @@ export function createStore(
     ...reviewRepository(db),
     ...activityRepository(db),
     ...officeRepository(db),
+    ...aiOfficeRepository(db),
     outputRoot,
     selection(
       account: string,
@@ -550,10 +552,12 @@ export function createStore(
         account,
         jobs.map((job) => job.id),
       );
+      const ai = aiActivities(db, account, jobs.map((job) => job.id));
       return {
         jobs: jobs.map((job) => ({
           ...publicJob(job),
           activity: activities.get(job.id)!,
+          aiActivity: ai.get(job.id)!,
         })),
         page: { total, limit, offset, hasMore: offset + jobs.length < total },
         filters: { q: filter.q, status: filter.status },
@@ -573,6 +577,7 @@ export function createStore(
         job: {
           ...publicJob(row),
           activity: jobActivities(db, account, [id]).get(id)!,
+          aiActivity: aiActivities(db, account, [id]).get(id)!,
         },
         events,
       };

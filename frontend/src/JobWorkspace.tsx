@@ -1,3 +1,5 @@
+import AiActivity from "./AiActivity";
+import { parseAiActivity } from "./aiActivity";
 import AiRuns from "./AiRuns";
 import { useServerOffice } from "./useServerOffice";
 import type { ServerOfficeView } from "./serverOffice";
@@ -87,6 +89,9 @@ export default function JobWorkspace({
       fileId = params.get("file"),
       runId = params.get("run");
     return fileId && runId ? { fileId, runId } : null;
+  });
+  const [aiTarget, setAiTarget] = useState<{ runId: string } | null>(() => {
+    const runId = new URLSearchParams(location.search).get("aiRun"); return runId ? { runId } : null;
   });
   const [activityVersion, setActivityVersion] = useState(0);
   const [detail, setDetail] = useState<JobDetail | null>(null);
@@ -281,7 +286,7 @@ export default function JobWorkspace({
     setTarget(nextTarget);
     const url = new URL(location.href);
     url.searchParams.set("job", id);
-    if (id !== selected) url.searchParams.delete("aiRun");
+    if (id !== selected) { url.searchParams.delete("aiRun"); setAiTarget(null); }
     if (nextTarget) {
       url.searchParams.set("file", nextTarget.fileId);
       url.searchParams.set("run", nextTarget.runId);
@@ -570,6 +575,7 @@ export default function JobWorkspace({
             집계·검토 상태 새로고침
           </button>
           <p className="session-note">
+            상태 필터는 정량 집계 전용이며 AI 현황은 별도로 표시합니다.
             진행 중 전체 건수와 첨부별 최근 실행의 검토 기록입니다. 상태
             새로고침은 열어 둔 결과·검토 의견을 유지합니다.
           </p>
@@ -589,7 +595,17 @@ export default function JobWorkspace({
                     {date(job.createdAt)}
                   </small>
                   <JobActivity activity={job.activity} compact />
+                  <AiActivity value={job.aiActivity} jobId={job.id} />
                 </button>
+                {(() => {
+                  try {
+                    const latest = parseAiActivity(job.aiActivity, job.id).latest;
+                    return latest ? <button className="text-button activity-open" onClick={() => {
+                      select(job.id); setAiTarget({ runId: latest.runId });
+                      const url = new URL(location.href); url.searchParams.set("aiRun", latest.runId); history.replaceState(null, "", url);
+                    }}>{job.title} 최근 AI 실행·검토 보기</button> : null;
+                  } catch { return null; }
+                })()}
                 {!!job.activity?.latest.length && (
                   <button
                     className="text-button activity-open"
@@ -683,7 +699,8 @@ export default function JobWorkspace({
                   </section>
                   <JobUpdateRevision.Provider value={live.revision}>
                     <AiRuns key={`${accountId}:${detail.job.id}`} jobId={detail.job.id}
-                      accountId={accountId} refreshKey={live.tick} onUnauthorized={onUnauthorized} />
+                      accountId={accountId} refreshKey={live.tick} target={aiTarget}
+                      onTargetChange={(runId) => setAiTarget(runId ? { runId } : null)} onUnauthorized={onUnauthorized} />
                     <Attachments
                       key={detail.job.id}
                       target={target}

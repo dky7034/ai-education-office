@@ -47,6 +47,7 @@ export interface SavedJob {
   createdAt: string;
   updatedAt: string;
   activity?: JobActivity;
+  aiActivity?: unknown;
 }
 export interface SavedEvent {
   id: string;

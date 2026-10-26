@@ -1,0 +1,71 @@
+import { test, expect } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { reviewFixture } from "./aiReviewFixtures";
+import { accountPanel, registerViaApi } from "./accountHelpers";
+const office = (page: import("@playwright/test").Page) => page.getByRole("region", { name: "AI 실행·검토 현황", exact: true });
+
+test("AI 목록·계정 전체 오피스·합성 표시·검토 알림을 읽기로 연결하고 입력·권한을 유지한다", async ({ page }) => {
+  const { id, job, base } = await reviewFixture(page);
+  let aiWrites = 0;
+  page.on("request", (r) => { if (["POST","PUT","PATCH","DELETE"].includes(r.method()) && r.url().includes("/ai-runs")) aiWrites++; });
+  await page.goto(`/?job=${job.id}`);
+  const card = page.locator(`[data-job-id="${job.id}"]`);
+  await expect(card.locator(".job-ai-activity")).toContainText("AI 초안 검토 대기");
+  await expect(card).toContainText("합성 기록 · 실제 AI 호출 아님");
+  await page.getByLabel(/업무 제목/).fill("유지할 합성 입력");
+  await card.getByRole("button", { name: job.title + " 최근 AI 실행·검토 보기", exact: true }).click();
+  await expect(page.getByRole("region", { name: "AI 초안 검토", exact: true })).toContainText("미승인 초안");
+  expect(new URL(page.url()).searchParams.get("aiRun")).toBe(id);
+  await expect(page.getByLabel(/업무 제목/)).toHaveValue("유지할 합성 입력");
+  await page.getByRole("button", { name: "서버 집계 보기", exact: true }).click();
+  await expect(office(page).getByRole("status")).toContainText("AI 초안 검토 대기");
+  await expect(office(page)).toContainText("합성 기록 · 실제 AI 호출 아님");
+  const link = office(page).getByRole("link", { name: "AI 실행·초안·검토 보기" });
+  expect(new URL((await link.getAttribute("href"))!,page.url()).searchParams.get("aiRun")).toBe(id);
+  await page.getByLabel("직원 선택", { exact: true }).getByRole("button", { name: /문서 전문가/ }).click();
+  await expect(page.locator(".person-status")).toContainText("합성 기록");
+  await expect(page.locator(".person-data")).toContainText("실제 AI 호출 아님");
+  const quantitative=page.getByRole("region",{name:"서버 집계 현황",exact:true});
+  await expect(quantitative.getByRole("status")).toHaveText("접수한 집계 없음");
+  await page.getByLabel("업무 검색",{exact:true}).fill("찾을수없는합성검색");
+  await page.getByRole("button",{name:"검색·필터 적용",exact:true}).click();
+  await expect(page.locator(".saved-job-list > li")).toHaveCount(0);
+  await expect(office(page).locator(".ai-office-counts dd").first()).toHaveText("1건");
+  const state=await(await page.request.get(base+"/review")).json();
+  const result=await page.request.post(base+"/review",{headers:{"X-Office-Request":"1","Idempotency-Key":randomUUID()},data:{targetHash:state.targetHash,decision:"approved",comment:"합성 현황 승인"}});
+  expect(result.status()).toBe(201);
+  await expect(office(page).getByRole("status")).toHaveText("AI 승인 기록");
+  await expect(page.getByLabel(/업무 제목/)).toHaveValue("유지할 합성 입력");
+  await page.getByRole("button",{name:"검색·필터 초기화",exact:true}).click();
+  await expect(card.locator(".job-ai-activity")).toContainText("AI 승인 기록");
+  expect(aiWrites).toBe(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await accountPanel(page).getByRole("button",{name:"로그아웃",exact:true}).click();
+  await expect(office(page)).toHaveCount(0);
+  await registerViaApi(page); await page.goto("/");
+  await page.getByRole("button",{name:"서버 집계 보기",exact:true}).click();
+  await expect(office(page).getByRole("status")).toHaveText("접수한 AI 기록 없음");
+  await expect(office(page)).not.toContainText(job.title);
+});
+
+test("AI Codex 상태의 합성 응답·연결 실패·잘못된 응답·복구를 정량 집계와 구분한다",async({page})=>{
+  const {id,job}=await reviewFixture(page);
+  let mode:"ok"|"offline"|"bad"="ok";
+  const record={runId:id,jobId:job.id,jobTitle:job.title,status:"running",mode:"codex",review:null,createdAt:"2026-10-26T00:00:00Z",startedAt:"2026-10-26T00:00:00Z",finishedAt:null};
+  const snapshot={executionMode:"ai_records",connectionVerified:false,totals:{latestRuns:1,queued:0,running:1,cancelling:0,syntheticLatest:0,codexLatest:1,completed:0,failed:0,cancelled:0,timedOut:0,interrupted:0,reviewPending:0,approved:0,rejected:0},focus:record,recent:[record]};
+  await page.route("**/api/jobs/ai-office",async route=>{
+    if(mode==="offline"){await route.abort();return;}
+    await route.fulfill({json:{...snapshot,connectionVerified:mode==="bad"}});
+  });
+  await page.goto(`/?job=${job.id}`); await page.getByRole("button",{name:"서버 집계 보기",exact:true}).click();
+  await page.getByLabel("직원 선택",{exact:true}).getByRole("button",{name:/문서 전문가/}).click();
+  await expect(page.locator(".person-status")).toContainText("Codex 기록 · AI 실행 중");
+  const trigger=async()=>{await page.request.post("/api/jobs",{headers:{"X-Office-Request":"1","Idempotency-Key":randomUUID()},data:{kind:"notice",title:"합성 AI 상태 갱신",instructions:"합성"}});};
+  mode="offline";await trigger();
+  await expect(office(page).getByRole("alert")).toContainText("연결");
+  await expect(page.locator(".person-status")).toHaveText("AI 기록 확인 필요");
+  await expect(page.getByRole("region",{name:"서버 집계 현황",exact:true}).getByRole("status")).toHaveText("접수한 집계 없음");
+  mode="bad";await trigger();await expect(office(page).getByRole("alert")).toContainText("응답");
+  mode="ok";await trigger();await expect(office(page).getByRole("alert")).toHaveCount(0);
+  await expect(page.locator(".person-status")).toContainText("Codex 기록 · AI 실행 중");
+});

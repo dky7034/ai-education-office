@@ -1,3 +1,4 @@
+import AiOfficePanel from "./AiOfficePanel";
 import ServerOfficePanel, { ServerOfficeRecent } from "./ServerOfficePanel";
 import { serverStaff, type ServerOfficeView } from "./serverOffice";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -212,7 +213,7 @@ export default function App() {
               </h1>
               <p>
                 {realMode
-                  ? "서버에 저장된 집계 현황을 역할 캐릭터로 확인하세요."
+                  ? "서버에 저장된 정량 집계와 AI 실행·검토 기록을 확인하세요."
                   : "업무를 선택하고, 우리 AI 직원들의 움직임을 살펴보세요."}
               </p>
             </div>
@@ -248,7 +249,7 @@ export default function App() {
                 서버 집계 보기
               </button>
               <p className="session-note">
-                로그인 후 계정 전체의 실제 정량 집계를 표시합니다. 서버 보기로
+                로그인 후 계정 전체의 정량 집계와 AI 기록을 구분해 표시합니다. 서버 보기로
                 전환하면 진행 중인 시연은 초기화합니다.
               </p>
             </div>
@@ -258,7 +259,7 @@ export default function App() {
             <p>
               {realMode ? (
                 <>
-                  <strong>서버에 저장된 정량 집계 기록입니다.</strong> 캐릭터의
+                  <strong>서버에 저장된 정량 집계·AI 기록입니다.</strong> 캐릭터의
                   이동은 상태를 표현하는 읽기 전용 표시입니다. 화면 전환으로
                   집계·승인·AI 호출을 실행하지 않습니다.
                 </>
@@ -434,7 +435,7 @@ export default function App() {
 
             <aside className="right-column" aria-label="직원 및 작업 현황">
               {realMode ? (
-                <ServerOfficePanel view={serverView!} />
+                <><ServerOfficePanel view={serverView!} /><AiOfficePanel view={serverView!} /></>
               ) : (
                 <section className="card status-card">
                   <div className="card-heading">
@@ -545,7 +546,7 @@ export default function App() {
                   <dd>{person.role}</dd>
                   <dt>현재 작업</dt>
                   <dd>{person.task ?? "배정된 업무가 없습니다."}</dd>
-                  <dt>{realMode ? "최근 서버 집계 기록" : "최근 시연 이력"}</dt>
+                  <dt>{realMode ? "최근 서버 역할 기록" : "최근 시연 이력"}</dt>
                   <dd>
                     {person.history.length ? (
                       <ul>
@@ -554,7 +555,7 @@ export default function App() {
                         ))}
                       </ul>
                     ) : realMode ? (
-                      "표시할 서버 집계 기록이 없습니다."
+                      "표시할 서버 역할 기록이 없습니다."
                     ) : (
                       "아직 시연 이력이 없습니다."
                     )}
@@ -562,7 +563,7 @@ export default function App() {
                 </dl>
                 <p className="person-footnote">
                   {realMode
-                    ? "서버 기록을 표시하는 역할 캐릭터입니다. 정량 집계는 데이터 분석가에 표시하며 승인·반려는 사용자가 확정합니다."
+                    ? "서버 기록을 표시하는 역할 캐릭터입니다. 정량 집계는 분석가, AI 텍스트 기록은 작성가에 표시합니다. 합성 기록은 작업 동작 없이 구분하며 승인·반려는 사용자가 확정합니다."
                     : "독립 AI 에이전트가 아닌 역할별 시각화 캐릭터입니다."}
                 </p>
               </section>

@@ -8,16 +8,20 @@ const failure = (e: unknown) => e instanceof DOMException && e.name === "Timeout
   ? "서버 응답 대기 시간을 초과했습니다. 기록을 조회한 뒤 다시 확인해 주세요."
   : e instanceof Error ? e.message : "AI 기록을 확인하지 못했습니다.";
 const denied = (e: unknown) => e instanceof ApiError && [401, 403, 404].includes(e.status);
-export default function AiRuns({ jobId, accountId, refreshKey, onUnauthorized }: {
+export default function AiRuns({ jobId, accountId, refreshKey, onUnauthorized, target, onTargetChange }: {
   jobId: string; accountId: string; refreshKey: number; onUnauthorized: () => void;
+  target?: { runId: string } | null; onTargetChange?: (id: string | null) => void;
 }) {
   const base = `/${jobId}/ai-runs`, headers = { "X-Office-Account": accountId };
   const [offset, setOffset] = useState(0), [version, setVersion] = useState(0);
   const [page, setPage] = useState<{ offset: number; value: AiPage } | null>(null);
   const [loading, setLoading] = useState(true), [fresh, setFresh] = useState(false), [listError, setListError] = useState("");
   const [selected, setSelected] = useState<string | null>(() => {
-    const value = new URLSearchParams(location.search).get("aiRun"); return aiUuid(value) ? value : null;
+    const value = target === undefined ? new URLSearchParams(location.search).get("aiRun") : target?.runId; return aiUuid(value) ? value : null;
   });
+  useEffect(() => {
+    if (target && aiUuid(target.runId)) { setSelected(target.runId); setDetailError(""); }
+  }, [target]);
   const [detail, setDetail] = useState<AiDetail | null>(null), [text, setText] = useState<{ id: string; value: AiText } | null>(null);
   const [detailError, setDetailError] = useState(""), [detailLoading, setDetailLoading] = useState(false);
   const [busy, setBusy] = useState(false), [actionError, setActionError] = useState(""), [notice, setNotice] = useState("");
@@ -80,7 +84,7 @@ export default function AiRuns({ jobId, accountId, refreshKey, onUnauthorized }:
     return () => clearTimeout(timer);
   }, [data, view, fresh, loading, listError, detailError, version]);
   function select(id: string | null) {
-    setSelected(id); setDetailError("");
+    setSelected(id); setDetailError(""); onTargetChange?.(id);
     const url = new URL(location.href); url.searchParams.set("job", jobId);
     if (id) url.searchParams.set("aiRun", id); else url.searchParams.delete("aiRun");
     history.replaceState(null, "", url);

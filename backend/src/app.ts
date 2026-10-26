@@ -76,6 +76,10 @@ export function createApp(
   app.use("/api/jobs", aiRoutes(store, options.aiConfig));
   app.use("/api/jobs", runRoutes(store, auth.requireAccount));
   app.use("/api/jobs", previewRoutes(store, auth.requireAccount));
+  app.get("/api/jobs/ai-office", (req, res) => {
+    if (Object.keys(req.query).length) { res.status(400).json({ error: "AI 현황은 계정 전체를 조회합니다. 조건을 지정하지 마세요." }); return; }
+    res.json(store.aiOfficeState(res.locals.account.id));
+  });
   app.get("/api/jobs/office", (req, res) => {
     if (Object.keys(req.query).length) {
       res
