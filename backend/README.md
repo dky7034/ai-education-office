@@ -105,3 +105,5 @@ v11은 AI 실행별 승인/반려 기록과 불변·소유권·계정 이벤트 
 
 
 스키마 v11을 유지하면서 목록/상세의 job.aiActivity와 GET /api/jobs/ai-office를 추가했습니다. AI 본문/의견을 읽지 않는 전체 진행/업무별 최근 검토 메타데이터이며 기존 정량 집계와 분리합니다. [AI 현황 안내](../docs/AI_STATUS.md)를 따릅니다.
+
+운영자 전용 `npm run check:ai`의 비공개 파일 설정·기본 무호출 검사·명시적 단일 호출과 미검증 범위는 [AI 연결 점검](../docs/AI_SERVICE_CHECK.md)을 따릅니다. 이 명령은 DB·HTTP·큐 활성화와 분리돼 있습니다.

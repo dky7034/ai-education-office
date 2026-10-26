@@ -21,7 +21,8 @@
     "test:e2e": "npm run build && playwright test",
     "test:dev": "playwright test --config playwright.dev.config.ts",
     "test:preview": "npm run build:preview && playwright test --config playwright.preview.config.ts",
-    "check:codex": "node scripts/check-codex.mts"
+    "check:codex": "node scripts/check-codex.mts",
+    "check:ai": "node scripts/check-ai.mts"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

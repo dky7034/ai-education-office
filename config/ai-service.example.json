@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "executable": "/absolute/path/to/codex",
+  "serviceApiKeyFile": "/secure/office/service.key",
+  "model": "replace-with-approved-model",
+  "maxRunMs": 30000,
+  "allowPaidCalls": false,
+  "allowDataTransfer": false,
+  "executionIsolationReviewed": false
+}
