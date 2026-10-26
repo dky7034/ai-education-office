@@ -1,3 +1,4 @@
+import { AI_REVIEW_SCHEMA, aiReviewRepository } from "./aiReviewStore.ts";
 import { AI_SCHEMA, aiRepository } from "./aiStore.ts";
 import { officeRepository } from "./officeState.ts";
 import { ACTIVITY_SCHEMA, activityRepository } from "./activityEvents.ts";
@@ -111,7 +112,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 10) {
+  if (version > 11) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -198,10 +199,15 @@ export function createStore(
     try { db.exec(AI_SCHEMA); }
     catch (error) { if (db.isTransaction) db.exec("ROLLBACK"); db.close(); throw error; }
   }
+  if (version < 11) {
+    try { db.exec(AI_REVIEW_SCHEMA); }
+    catch (error) { if (db.isTransaction) db.exec("ROLLBACK"); db.close(); throw error; }
+  }
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
     ...runRepository(db),
     ...aiRepository(db),
+    ...aiReviewRepository(db),
     ...reviewRepository(db),
     ...activityRepository(db),
     ...officeRepository(db),

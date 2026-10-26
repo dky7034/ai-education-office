@@ -7,7 +7,7 @@ const run: AiRun = { id, jobId: job, status: "completed", mode: "synthetic", mod
   remoteStatus: "completed", threadId: "thread", turnId: "turn", createdAt: time, startedAt: time, finishedAt: time };
 const page = { runs: [run], page: { total: 1, limit: 20, offset: 0, hasMore: false }, capability: { configured: false, mode: "disabled" } };
 const events = ["queued", "running", "completed"].map((status) => ({ status, createdAt: time }));
-const result = (text: string) => ({ text, sha256: createHash("sha256").update(text).digest("hex"), needsReview: true, mode: "synthetic" });
+const result = (text: string) => ({ text, sha256: createHash("sha256").update(text).digest("hex"), needsReview: true, mode: "synthetic", reviewTargetHash: "a".repeat(64) });
 describe("AI 실행 응답 계약", () => {
   it("설정 비활성과 합성 보관 기록을 독립적으로 수락한다", () => {
     expect(parseAiPage(page, job, 0).runs[0].mode).toBe("synthetic");

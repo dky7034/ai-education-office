@@ -1,3 +1,4 @@
+import AiReview from "./AiReview";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, jobsApi } from "./jobsApi";
 import { AI_STATUS, AiProtocolError, aiActive, aiOutcome, aiUuid, parseAiDetail, parseAiPage, parseAiAdmission, parseAiCancel, parseAiText,
@@ -54,8 +55,11 @@ export default function AiRuns({ jobId, accountId, refreshKey, onUnauthorized }:
     const controller = new AbortController(), signal = AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]);
     const generation = accessGeneration.current;
     setDetailLoading(true);
+    let metadataValid = false;
     void (async () => {
       const next = parseAiDetail(await jobsApi(`${base}/${selected}`, { headers, signal }), jobId, selected);
+      metadataValid = true;
+      if (!signal.aborted && generation === accessGeneration.current) setDetail(next);
       const stored = next.run.status === "completed" ? await parseAiText(
         await jobsApi(`${base}/${selected}/result`, { headers, signal }), next.run) : null;
       if (!signal.aborted && generation === accessGeneration.current) { setDetail(next); setText(stored ? { id: selected, value: stored } : null); setDetailError(""); }
@@ -63,7 +67,7 @@ export default function AiRuns({ jobId, accountId, refreshKey, onUnauthorized }:
       if (controller.signal.aborted || generation !== accessGeneration.current) return;
       checkAuth(e); setDetailError(failure(signal.aborted ? signal.reason : e));
       if (denied(e)) clearAccess();
-      else if (e instanceof AiProtocolError || (e instanceof ApiError && e.status === 409)) { setDetail(null); setText(null); }
+      else if (e instanceof AiProtocolError || (e instanceof ApiError && e.status === 409)) { if (!metadataValid) setDetail(null); setText(null); }
     }).finally(() => { if (!controller.signal.aborted) setDetailLoading(false); });
     return () => controller.abort();
   }, [base, accountId, selected, version, refreshKey]);
@@ -162,10 +166,15 @@ export default function AiRuns({ jobId, accountId, refreshKey, onUnauthorized }:
         <ol className="ai-events" aria-label="AI 실행 상태 이력">{view.events.map((e, i) => <li key={i}>{date(e.createdAt)} · {AI_STATUS[e.status]}</li>)}</ol>
       </>}
       {stored && <section aria-label="검수 필요한 AI 초안" className="ai-text">
-        <h5>검수 필요 · 미승인 초안</h5>
-        <p className="session-note">생성된 문장의 사실성·표현을 사람이 확인해야 합니다. 승인·외부 발송·파일 반영은 하지 않았습니다.{detailError && " 마지막으로 확인한 초안이며 현재 무결성은 재확인하지 못했습니다."}</p>
+        <h5>검수 필요 · AI 생성 초안</h5>
+        <p className="session-note">생성된 문장의 사실성·표현을 사람이 확인해야 합니다. 검토 기록은 아래에서 확인합니다. 외부 발송·파일 반영은 하지 않습니다.{detailError && " 마지막으로 확인한 초안이며 현재 무결성은 재확인하지 못했습니다."}</p>
         <pre>{stored.text}</pre>
+
       </section>}
+      {view?.run.status === "completed" && <AiReview key={`${accountId}:${selected}:${stored?.reviewTargetHash ?? "unverified"}`}
+        jobId={jobId} runId={selected!} accountId={accountId} expectedTargetHash={stored?.reviewTargetHash ?? null}
+        expectedResultHash={stored?.sha256 ?? null} readable={!!stored && !detailError && !detailLoading}
+        refreshKey={`${refreshKey}:${version}`} onUnauthorized={onUnauthorized} />}
     </section>}
   </section>;
 }

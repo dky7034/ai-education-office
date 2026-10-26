@@ -266,7 +266,7 @@ test("v6 완료 기록은 v7 마이그레이션 뒤 결과를 유지하며 파�
     );
     assert.equal(existsSync(join(store.outputRoot, run.id)), false);
     const check = new DatabaseSync(f.filename);
-    assert.equal(check.prepare("PRAGMA user_version").get()!.user_version, 10);
+    assert.equal(check.prepare("PRAGMA user_version").get()!.user_version, 11);
     assert.equal(check.prepare("PRAGMA foreign_key_check").all().length, 0);
     check.close();
   } finally {

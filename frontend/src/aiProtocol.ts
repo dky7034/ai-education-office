@@ -15,7 +15,7 @@ export interface AiPage {
   capability: { configured: boolean; mode: "disabled" | "synthetic" | "codex" };
 }
 export interface AiDetail { run: AiRun; events: { status: AiStatus; createdAt: string }[] }
-export interface AiText { text: string; sha256: string; needsReview: true; mode: AiRun["mode"] }
+export interface AiText { text: string; sha256: string; needsReview: true; mode: AiRun["mode"]; reviewTargetHash: string }
 export class AiProtocolError extends Error {
   constructor() { super("AI 실행 응답을 확인하지 못했습니다. 다시 조회해 주세요."); }
 }
@@ -65,6 +65,7 @@ export function parseAiDetail(value: unknown, jobId: string, runId: string): AiD
 export async function parseAiText(value: unknown, run: AiRun): Promise<AiText> {
   if (!object(value) || run.status !== "completed" || value.mode !== run.mode || value.needsReview !== true
     || typeof value.text !== "string" || !value.text.trim() || new TextEncoder().encode(value.text).length > 16384
+    || typeof value.reviewTargetHash !== "string" || !/^[a-f0-9]{64}$/.test(value.reviewTargetHash)
     || typeof value.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.sha256)) throw new AiProtocolError();
   let digest: ArrayBuffer;
   try { digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value.text)); }

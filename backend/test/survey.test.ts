@@ -317,7 +317,7 @@ test("v4 선택·원본·업무·계정·이력을 보존하고 v5 설문 기본
       assert.equal(
         (db.prepare("PRAGMA user_version").get() as { user_version: number })
           .user_version,
-        10,
+        11,
       );
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
       assert.equal(

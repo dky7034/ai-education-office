@@ -383,7 +383,7 @@ test("v5 데이터·설정·원본을 보존하며 v6 실행 테이블을 추가
     }
     const db = new DatabaseSync(f.filename, { readOnly: true });
     try {
-      assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 10);
+      assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 11);
       assert.equal(db.prepare("PRAGMA quick_check").get()!.quick_check, "ok");
       assert.equal(db.prepare("PRAGMA foreign_key_check").all().length, 0);
     } finally {

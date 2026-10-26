@@ -246,7 +246,7 @@ test("현황 조회는 파일을 읽지 않고 재시작 후 동일한 기록을
     assert.equal(activity.latest[0].review, "approved");
     await t.f.restart();
     assert.deepEqual((await t.list()).jobs[0].activity, activity);
-    assert.equal(t.db.prepare("PRAGMA user_version").get()!.user_version, 10);
+    assert.equal(t.db.prepare("PRAGMA user_version").get()!.user_version, 11);
   } finally {
     await t.cleanup();
   }
@@ -486,7 +486,7 @@ test("검색 쿼리·상태·중복/객체 매개변수·페이지 오류를 거
     );
     assert.equal(all.page.total, 1);
     assert.equal(all.jobs.length, 1);
-    assert.equal(t.db.prepare("PRAGMA user_version").get()!.user_version, 10);
+    assert.equal(t.db.prepare("PRAGMA user_version").get()!.user_version, 11);
   } finally {
     await t.cleanup();
   }

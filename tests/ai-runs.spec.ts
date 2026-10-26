@@ -67,7 +67,7 @@ test("AI 기본 비활성·합성 초안·페이지·URL 복원·계정 격리�
   await expect(ai.locator(".ai-run-list > li")).toHaveCount(20);
   await row(page, ids[22]).getByRole("button", { name: "AI 초안 결과 보기" }).click();
   const stored = ai.getByRole("region", { name: "검수 필요한 AI 초안" });
-  await expect(stored).toContainText("미승인 초안"); await expect(stored.locator("pre")).toHaveText(text);
+  await expect(ai).toContainText("미승인 초안"); await expect(stored.locator("pre")).toHaveText(text);
   expect(await stored.locator("script").count()).toBe(0);
   expect(await page.evaluate(() => (window as Window & {__aiUnsafe?:boolean}).__aiUnsafe)).toBeUndefined();
   await ai.getByRole("button", { name: "다음 AI 기록" }).click();

@@ -234,7 +234,7 @@ test("v9→v10 마이그레이션은 기존 이력을 보존하고 실패한 추
   const migrated = createStore(f.f.filename); t.after(() => migrated.close());
   assert.deepEqual(migrated.detail(f.a.user.id, f.job.id), job);
   assert.deepEqual(migrated.activityHead(f.a.user.id), before);
-  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version, 10);
+  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version, 11);
   assert.equal(f.db.prepare("PRAGMA quick_check").get()!.quick_check, "ok");
   assert.equal(f.db.prepare("PRAGMA foreign_key_check").all().length, 0);
 });

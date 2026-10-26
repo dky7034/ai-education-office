@@ -36,6 +36,26 @@ export function aiRoutes(store: Store, config?: AiConfig) {
     if (!result) { res.status(404).json({ error: "업무를 찾을 수 없습니다." }); return; }
     res.status(result.replayed ? 200 : 202).json(result);
   }));
+  router.get(base + "/:runId/review", handle((req, res) => {
+    if (Object.keys(req.query).length) { res.status(400).json({ error: "검토 조회 조건을 지정하지 마세요." }); return; }
+    const id = String(req.params.runId), value = uuid.test(id) ? store.aiReviewState(res.locals.account.id, String(req.params.id), id) : null;
+    if (!value) { res.status(404).json({ error: "AI 실행 기록을 찾을 수 없습니다." }); return; }
+    res.json(value);
+  }));
+  router.post(base + "/:runId/review", handle((req, res) => {
+    const body = req.body, key = req.get("idempotency-key"), id = String(req.params.runId);
+    if (Object.keys(req.query).length || !body || Array.isArray(body)
+      || Object.keys(body).some((field) => !["targetHash", "decision", "comment"].includes(field))
+      || typeof body.targetHash !== "string" || !/^[a-f0-9]{64}$/.test(body.targetHash)
+      || !["approved", "rejected"].includes(body.decision) || typeof body.comment !== "string"
+      || body.comment !== body.comment.trim() || body.comment.length > 2000 || (body.decision === "rejected" && !body.comment)
+      || !key || !/^[A-Za-z0-9_-]{8,100}$/.test(key)) {
+      res.status(400).json({ error: "검토 대상·결정·요청 식별자를 확인해 주세요. 의견은 앞뒤 공백 없이 2,000자 이하이며 반려 사유는 필수입니다." }); return;
+    }
+    const value = uuid.test(id) ? store.decideAiReview(res.locals.account.id, String(req.params.id), id, key, body) : null;
+    if (!value) { res.status(404).json({ error: "AI 실행 기록을 찾을 수 없습니다." }); return; }
+    res.status(value.replayed ? 200 : 201).json(value);
+  }));
   router.get([base + "/:runId", base + "/:runId/result"], handle((req, res) => {
     if (Object.keys(req.query).length) { res.status(400).json({ error: "조회 조건을 지정하지 마세요." }); return; }
     const id = String(req.params.runId);
@@ -43,7 +63,11 @@ export function aiRoutes(store: Store, config?: AiConfig) {
       ? store.aiResult(res.locals.account.id, String(req.params.id), id)
       : store.aiRun(res.locals.account.id, String(req.params.id), id)) : null;
     if (!value) { res.status(404).json({ error: "AI 실행 기록을 찾을 수 없습니다." }); return; }
-    res.json(value);
+    if (req.path.endsWith("/result")) {
+      const target = store.aiReviewState(res.locals.account.id, String(req.params.id), id);
+      if (!target?.reviewable) throw new AiError(409, "보관된 AI 초안의 검토 대상을 확인하지 못했습니다.");
+      res.json({ ...value, reviewTargetHash: target.targetHash });
+    } else res.json(value);
   }));
   router.post(base + "/:runId/cancel", handle((req, res) => {
     if (Object.keys(req.query).length || !req.body || Array.isArray(req.body) || Object.keys(req.body).length) {
