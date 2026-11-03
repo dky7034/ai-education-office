@@ -2,6 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
+// Browser regression servers always use disabled AI dispatch, even in an operator shell.
+delete process.env.OFFICE_AI_RUNTIME_CONFIG;
+
 process.env.OFFICE_E2E_DB = resolve("database/e2e.sqlite");
 
 export default defineConfig({

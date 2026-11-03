@@ -14,7 +14,7 @@ export class ServiceConfigError extends Error {
 export type ServiceConfig = ConstructorParameters<typeof CodexExecution>[0];
 
 // Read only an operator-owned private regular file. Never put file paths or contents in errors.
-async function privateFile(path: unknown, limit: number, code: "config_file" | "key_file") {
+export async function readPrivateConfigFile(path: unknown, limit: number, code: "config_file" | "key_file") {
   if (typeof path !== "string" || !isAbsolute(path) || path.includes("\0")) throw new ServiceConfigError(code);
   let file;
   try {
@@ -37,7 +37,7 @@ async function privateFile(path: unknown, limit: number, code: "config_file" | "
 
 /** Offline validation only: no child process, provider request, DB or inherited auth. */
 export async function loadServiceConfig(path: string): Promise<ServiceConfig> {
-  const json = await privateFile(path, 8192, "config_file");
+  const json = await readPrivateConfigFile(path, 8192, "config_file");
   let value: unknown;
   try { value = JSON.parse(json); } catch { throw new ServiceConfigError("config_schema"); }
   const keys = ["version", "executable", "serviceApiKeyFile", "model", "maxRunMs", "allowPaidCalls", "allowDataTransfer", "executionIsolationReviewed"];
@@ -52,7 +52,7 @@ export async function loadServiceConfig(path: string): Promise<ServiceConfig> {
     if (!(await stat(value.executable)).isFile()) throw new Error();
     await access(value.executable, constants.X_OK);
   } catch { throw new ServiceConfigError("executable"); }
-  const serviceApiKey = (await privateFile(value.serviceApiKeyFile, 4098, "key_file")).replace(/\r?\n$/, "");
+  const serviceApiKey = (await readPrivateConfigFile(value.serviceApiKeyFile, 4098, "key_file")).replace(/\r?\n$/, "");
   if (!serviceApiKey || serviceApiKey !== serviceApiKey.trim() || Buffer.byteLength(serviceApiKey) > 4096 || /[\x00-\x20\x7f]/.test(serviceApiKey))
     throw new ServiceConfigError("key_format");
   return { executable: value.executable, serviceApiKey, policy: {

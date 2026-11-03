@@ -19,6 +19,7 @@ export function createApp(
     secureCookies?: boolean;
     authRateLimit?: number;
     aiConfig?: AiConfig;
+    aiAllowedAccounts?: readonly string[];
   } = {},
 ) {
   const app = express();
@@ -73,7 +74,7 @@ export function createApp(
   app.use("/api/auth", auth.router);
   app.use("/api/jobs", auth.requireAccount);
   app.use("/api/jobs", attachmentRoutes(store, auth.requireAccount));
-  app.use("/api/jobs", aiRoutes(store, options.aiConfig));
+  app.use("/api/jobs", aiRoutes(store, options.aiConfig, options.aiAllowedAccounts));
   app.use("/api/jobs", runRoutes(store, auth.requireAccount));
   app.use("/api/jobs", previewRoutes(store, auth.requireAccount));
   app.get("/api/jobs/ai-office", (req, res) => {

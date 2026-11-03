@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "enableDispatch": false,
+  "serviceCallVerified": false,
+  "serviceConfigFile": "/secure/office/service.json",
+  "policyId": "replace-with-reviewed-policy-v1",
+  "allowedAccountIds": []
+}

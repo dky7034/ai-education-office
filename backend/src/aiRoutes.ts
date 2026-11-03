@@ -2,8 +2,10 @@ import express from "express";
 import type { Store } from "./store.ts";
 import { AiError, type AiConfig } from "./aiStore.ts";
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
-export function aiRoutes(store: Store, config?: AiConfig) {
+export function aiRoutes(store: Store, config?: AiConfig, allowedAccounts?: readonly string[]) {
   const router = express.Router(), base = "/:id/ai-runs";
+  const allowed = allowedAccounts === undefined ? undefined : new Set(allowedAccounts);
+  const accountConfig = (account: string) => allowed === undefined || allowed.has(account) ? config : undefined;
   router.use(base, (req, res, next) => {
     if (!uuid.test(String(req.params.id)) || !store.detail(res.locals.account.id, String(req.params.id))) {
       res.status(404).json({ error: "업무를 찾을 수 없거나 이 계정에서 접근할 수 없습니다." }); return;
@@ -20,7 +22,7 @@ export function aiRoutes(store: Store, config?: AiConfig) {
       res.status(400).json({ error: "조회 개수는 1~20, 시작 위치는 0 이상의 정수여야 합니다." }); return;
     }
     res.json({ ...store.listAiRuns(res.locals.account.id, String(req.params.id), limit, offset),
-      capability: { configured: !!config, mode: config?.mode ?? "disabled" } });
+      capability: { configured: !!accountConfig(res.locals.account.id), mode: accountConfig(res.locals.account.id)?.mode ?? "disabled" } });
   });
   const handle = (fn: express.RequestHandler): express.RequestHandler => (req, res, next) => {
     try { fn(req, res, next); }
@@ -32,7 +34,7 @@ export function aiRoutes(store: Store, config?: AiConfig) {
       || !key || !/^[A-Za-z0-9_-]{8,100}$/.test(key)) {
       res.status(400).json({ error: "빈 요청 본문과 유효한 요청 식별자가 필요합니다. AI 입력은 저장된 업무에서 가져옵니다." }); return;
     }
-    const result = store.enqueueAi(res.locals.account.id, String(req.params.id), key, config);
+    const result = store.enqueueAi(res.locals.account.id, String(req.params.id), key, accountConfig(res.locals.account.id));
     if (!result) { res.status(404).json({ error: "업무를 찾을 수 없습니다." }); return; }
     res.status(result.replayed ? 200 : 202).json(result);
   }));

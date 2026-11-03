@@ -144,12 +144,13 @@ export function aiRepository(db: DatabaseSync) {
     },
     renewAiLease(owner: string, ttl = 10_000) { return !!db.prepare("UPDATE ai_queue_lease SET expires_at=? WHERE owner=? AND expires_at>?").run(Date.now() + ttl, owner, Date.now()).changes; },
     releaseAiLease(owner: string) { db.prepare("UPDATE ai_queue_lease SET owner='',expires_at=0 WHERE owner=?").run(owner); },
-    claimAi(owner: string, config: AiConfig) {
+    claimAi(owner: string, config: AiConfig, allowedAccounts?: readonly string[]) {
       return transaction(() => {
         if (!lease(owner)) return null;
         const row = db.prepare(SELECT + " WHERE status='queued' ORDER BY rowid LIMIT 1").get() as Row | undefined;
         if (!row) return null;
         if (!ownsJob(row.accountId, row.jobId)) { finish(row.id, "failed", "ownership_changed"); return null; }
+        if (allowedAccounts !== undefined && !allowedAccounts.includes(row.accountId)) { finish(row.id, "failed", "account_not_enabled"); return null; }
         if (row.mode !== config.mode || row.model !== config.model || row.policyId !== config.policyId) { finish(row.id, "failed", "configuration_changed"); return null; }
         db.prepare("UPDATE ai_runs SET status='running',started_at=? WHERE id=? AND status='queued'").run(new Date().toISOString(), row.id);
         event(row.id, "running");

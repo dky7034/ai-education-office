@@ -18,6 +18,7 @@ export async function fixture(
   options: {
     authRateLimit?: number;
     aiConfig?: AiConfig;
+    aiAllowedAccounts?: readonly string[];
     secureCookies?: boolean;
     liveIntervalMs?: number;
     seed?: (filename: string) => void;

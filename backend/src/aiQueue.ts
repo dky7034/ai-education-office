@@ -17,8 +17,9 @@ export function codexAiRegistration(options: ConstructorParameters<typeof CodexE
   return { config, create: () => new CodexExecution(saved) };
 }
 export function createAiQueue(store: Store, registration?: AiRegistration,
-  options: { pollMs?: number; timeoutMs?: number } = {}) {
+  options: { pollMs?: number; timeoutMs?: number; allowedAccounts?: readonly string[] } = {}) {
   if (registration && !validAiConfig(registration.config)) throw new Error("AI 실행 설정이 올바르지 않습니다.");
+  const allowedAccounts = options.allowedAccounts === undefined ? undefined : [...options.allowedAccounts];
   const config = registration ? { ...registration.config } : undefined;
   const owner = randomUUID(), poll = options.pollMs ?? 250, timeout = options.timeoutMs ?? 130_000;
   if (!Number.isSafeInteger(poll) || poll < 10 || poll > 1000 || !Number.isSafeInteger(timeout) || timeout < 50 || timeout > 180_000)
@@ -67,7 +68,7 @@ export function createAiQueue(store: Store, registration?: AiRegistration,
       return;
     }
     if (blocked || !registration || !config) return; // Recovery-only default; never calls a model.
-    const claimed = store.claimAi(owner, config);
+    const claimed = store.claimAi(owner, config, allowedAccounts);
     if (!claimed) return;
     let executor: AiExecutor;
     try { executor = registration.create(); }
