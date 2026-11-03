@@ -1033,3 +1033,41 @@ test("다른 화면의 검토 확정은 자동 반영하고 이전 자동 갱신
     }),
   ).toBeVisible();
 });
+
+test("저장 설문 통계의 메일 초안은 검수 필요 TXT이며 재시도·이전 설정·검토 의견을 유지한다", async ({ page }) => {
+  const {base} = await attach(page, "가상 메일.csv", Buffer.from("만족도,선택\n1,5\n5,\n3,합성개별응답_복사금지\n,\n"), [0, 1]);
+  const settings = { sheetId: "csv", headerRow: 1, columns: [0, 1], revision: 1,
+    questions: [{index: 0, min: 1, max: 5, required: true}, {index: 1, min: 1, max: 5, required: false}] };
+  expect((await page.request.put(base + "/selection", { headers: {"X-Office-Request": "1"}, data: settings })).status()).toBe(200);
+  await page.getByRole("button", {name: "저장 상태 다시 불러오기", exact: true}).click();
+  const queue = page.getByRole("region", {name: "백그라운드 집계 작업", exact: true});
+  await queue.getByRole("button", {name: "백그라운드 집계 접수", exact: true}).click();
+  await expect(queue.locator(".summary-run-list > li strong")).toHaveText("완료");
+  await queue.getByRole("button", {name: "저장된 집계 결과 보기", exact: true}).click();
+  const stored = queue.getByRole("region", {name: "저장된 백그라운드 집계 결과", exact: true});
+  const button = stored.getByRole("button", {name: "설문 요약 메일 초안 TXT 다운로드", exact: true});
+  await expect(button).toBeEnabled();
+  await expect(stored.getByText(/규칙 기반 초안 · AI 생성 아님/)).toBeVisible();
+  const note = stored.getByRole("textbox");
+  await note.fill("가상 미제출 검토 의견");
+  let fail = true;
+  await page.route("**/runs/*/mail-draft", async (route) => {
+    if (fail) { fail = false; await route.abort(); } else await route.continue();
+  });
+  await button.click(); await expect(queue.getByRole("alert")).toContainText("내려받지 못했습니다");
+  async function downloadText() {
+    const pending = page.waitForEvent("download"); await button.click(); const file = await pending;
+    expect(file.suggestedFilename()).toMatch(/^office-survey-mail-[a-f0-9-]+\.txt$/);
+    return await readFile((await file.path())!, "utf8");
+  }
+  const text = await downloadText();
+  expect(text).toContain("유효 응답 2행, 기준 미충족 1행");
+  expect(text).toContain("유효값 합계 9 · 평균 3");
+  expect(text).toContain("AI 생성 아님 · 자동 발송 없음");
+  expect(text).not.toContain("합성개별응답_복사금지");
+  expect(await note.inputValue()).toBe("가상 미제출 검토 의견");
+  expect((await page.request.put(base + "/selection", {headers: {"X-Office-Request": "1"}, data: {...settings, revision: 2, questions: []}})).status()).toBe(200);
+  expect(await downloadText()).toBe(text);
+  expect(await note.inputValue()).toBe("가상 미제출 검토 의견");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});

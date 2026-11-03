@@ -235,13 +235,13 @@ export default function BackgroundSummary({
       });
     return () => controller.abort();
   }, [base, accountId, initialRunId]);
-  async function download(artifact: Artifact) {
+  async function download(artifact: Artifact | "mail-draft") {
     if (busy || !stored) return;
     setBusy(true);
     setError("");
     try {
       const response = await fetch(
-        `/api/jobs${base}/${stored.run.id}/artifacts/${artifact.format}`,
+        `/api/jobs${base}/${stored.run.id}/${artifact === "mail-draft" ? "mail-draft" : `artifacts/${artifact.format}`}`,
         {
           credentials: "same-origin",
           headers,
@@ -253,17 +253,17 @@ export default function BackgroundSummary({
         throw new ApiError(data.error, response.status);
       }
       const mime =
-        artifact.format === "xlsx"
+        artifact === "mail-draft" ? "text/plain" : artifact.format === "xlsx"
           ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           : `text/${artifact.format}`;
       if (!response.headers.get("content-type")?.includes(mime))
-        throw new Error("보관 파일 응답을 확인하지 못했습니다.");
+        throw new Error("다운로드 응답을 확인하지 못했습니다.");
       const blob = await response.blob();
       if (!mounted.current) return;
       const url = URL.createObjectURL(blob),
         link = document.createElement("a");
       link.href = url;
-      link.download = `office-run-${stored.run.id}.${artifact.format}`;
+      link.download = artifact === "mail-draft" ? `office-survey-mail-${stored.run.id}.txt` : `office-run-${stored.run.id}.${artifact.format}`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (e) {
@@ -271,7 +271,9 @@ export default function BackgroundSummary({
         e instanceof ApiError
           ? e
           : new Error(
-              "보관 파일을 내려받지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
+              artifact === "mail-draft"
+                ? "설문 초안을 내려받지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요."
+                : "보관 파일을 내려받지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
             ),
       );
     } finally {
@@ -427,6 +429,12 @@ export default function BackgroundSummary({
               수 있습니다. 파일이 필요하면 새 집계 작업을 접수해 주세요.
             </p>
           )}
+          {stored.summary.survey && <div>
+            <button className="secondary-button" disabled={busy} onClick={() => download("mail-draft")}>
+              설문 요약 메일 초안 TXT 다운로드
+            </button>
+            <p className="session-note">저장된 설문 통계로 만드는 규칙 기반 초안 · AI 생성 아님 · 검수 필요 · 발송하지 않습니다. 보관 파일·승인 대상에 추가되지 않습니다.</p>
+          </div>}
           <RunReview
             key={stored.run.id}
             base={`${base}/${stored.run.id}`}

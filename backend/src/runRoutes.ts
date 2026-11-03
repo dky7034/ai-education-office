@@ -1,3 +1,4 @@
+import { surveyMail } from "./surveyMail.ts";
 import { publicReview, type ReviewInput } from "./reviewStore.ts";
 import express, { type RequestHandler } from "express";
 import {
@@ -254,6 +255,27 @@ export function runRoutes(store: Store, requireAccount: RequestHandler) {
         res.status(409).json({ error: error.message });
       else if (error instanceof RunError)
         res.status(error.status).json({ error: error.message });
+      else next(error);
+    }
+  });
+  router.get(base + "/:runId/mail-draft", (req, res, next) => {
+    if (Object.keys(req.query).length) { res.status(400).json({ error: "설문 초안 조회 조건을 지정하지 마세요." }); return; }
+    const id = String(req.params.runId);
+    try {
+      const detail = uuid.test(id) ? store.summaryRun(...scope(req, res), id) : null;
+      if (!detail) { res.status(404).json({ error: "집계 작업을 찾을 수 없습니다." }); return; }
+      let summary: unknown;
+      try { summary = store.summaryRunResult(...scope(req, res), id); }
+      catch (error) {
+        if (error instanceof SyntaxError) throw new RunError(409, "저장된 집계 결과를 읽을 수 없습니다.");
+        throw error;
+      }
+      const bytes = surveyMail(summary, detail.run);
+      res.set({ "Content-Type": "text/plain; charset=utf-8",
+        "Content-Disposition": `attachment; filename="office-survey-mail-${id}.txt"` });
+      res.send(bytes);
+    } catch (error) {
+      if (error instanceof RunError) res.status(error.status).json({ error: error.message });
       else next(error);
     }
   });

@@ -57,3 +57,5 @@
 - 제품용 연결 점검은 `npm run check:ai`의 오프라인 검사와 명시적 `-- --execute` 단일 가상 데이터 호출을 구분합니다. OFFICE_AI_CONFIG의 비공개 0600 설정/키 파일만 사용하고 개발 인증을 대체 사용하지 않습니다. 키·생성 원문·원격 오류를 출력하지 않으며 업무 DB/HTTP/큐 활성화와 분리합니다. docs/AI_SERVICE_CHECK.md를 따릅니다.
 
 - AI 서버 활성화는 OFFICE_AI_RUNTIME_CONFIG의 비공개 운영 설정만 사용합니다. enableDispatch/serviceCallVerified·별도 제품 설정·policyId·소문자 UUID 허용 계정 1~20개를 검증하며 미지정은 비활성, 잘못된 설정은 DB 열기 전 종료합니다. HTTP 신규 접수와 큐 claim 양쪽에 허용 계정을 적용하고 제거된 대기는 account_not_enabled로 종료합니다. 조회·기존 요청 재확인·검토·취소 권한은 유지합니다. 운영 변경은 정상 종료/재시작이며 실제 호출 성공과 설정 완료를 구분하고 docs/AI_RUNTIME.md를 따릅니다.
+
+- 설문 요약 메일 초안은 완료 실행의 저장 JSON만으로 만드는 읽기 전용 TXT 파생물입니다. 행 유효성과 문항 통계를 구분하고 십진 문자열을 유지하며 개별 응답/지시문/검토 의견을 복사하지 않습니다. AI 호출·발송·원본 읽기·보관 3종 추가/변경·검토/이벤트 쓰기를 금지하고 스키마 v11을 유지합니다. 제목 한 줄 정리·160 Unicode 문자 표시·128KiB·UTF-8 BOM/CRLF·권한/형식 검증은 docs/SURVEY_MAIL.md를 따릅니다.
