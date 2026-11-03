@@ -1,3 +1,4 @@
+import type { NoticeInput } from "./NoticeDraft";
 import type { StaffId, TaskKind } from "./simulation";
 
 export const JOB_FILTERS = [
@@ -41,6 +42,7 @@ export interface SavedJob {
   kind: TaskKind;
   title: string;
   instructions: string;
+  notice?: NoticeInput;
   assignedStaff: StaffId;
   status: "received";
   executionMode: "not_connected";

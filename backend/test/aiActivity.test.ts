@@ -46,7 +46,7 @@ test("AI 읽기 현황은 본문/의견/원본을 읽거나 검토 유효성을 
   assert.equal(value.totals.approved,1);assert.equal(value.connectionVerified,false);
   const json=JSON.stringify(value);for(const secret of ["PRIVATE_","NOT_JSON","resultHash","targetHash","inputText"])assert.equal(json.includes(secret),false);
   assert.deepEqual(f.s.officeState(f.a.user.id),quantitative);assert.deepEqual(f.s.activityHead(f.a.user.id),before);
-  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version,11);
+  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version,12);
   assert.equal(f.db.prepare("PRAGMA foreign_key_check").all().length,0);
 });
 test("AI 대표 기록은 실행·중단·대기·검토를 우선하고 새 실행 뒤 과거 승인은 숨긴다", async (t) => {

@@ -111,3 +111,5 @@ v11은 AI 실행별 승인/반려 기록과 불변·소유권·계정 이벤트 
 `OFFICE_AI_RUNTIME_CONFIG`는 [계정 제한 AI 운영 설정](../docs/AI_RUNTIME.md)의 명시적 시작 옵션입니다. 미지정은 비활성, 잘못된 설정은 DB 열기 전 시작 실패이며 HTTP와 큐가 동일한 허용 계정 목록을 사용합니다.
 
 완료 실행의 `GET /api/jobs/:jobId/attachments/:fileId/runs/:runId/mail-draft`는 [설문 요약 초안](../docs/SURVEY_MAIL.md)을 메모리에서 TXT로 생성합니다. 현재 저장 JSON만 사용하고 보관 3종·검토 대상·스키마는 변경하지 않습니다.
+
+v12는 jobs.notice_json(nullable)을 추가합니다. 구조화 공지 생성/다운로드·기존 요청 호환·원자적 저장·검수 범위는 [공지·메일 초안](../docs/NOTICE_DRAFT.md)을 따릅니다. 기존 집계/AI/검토 테이블은 변경하지 않습니다.

@@ -1,3 +1,4 @@
+import { NOTICE_SCHEMA, normalizeNotice, type NoticeInput } from "./noticeDraft.ts";
 import { aiActivities, aiOfficeRepository } from "./aiActivity.ts";
 import { AI_REVIEW_SCHEMA, aiReviewRepository } from "./aiReviewStore.ts";
 import { AI_SCHEMA, aiRepository } from "./aiStore.ts";
@@ -35,6 +36,7 @@ export interface RequestInput {
   kind: Kind;
   title: string;
   instructions: string;
+  notice?: NoticeInput;
 }
 export interface Job extends RequestInput {
   id: string;
@@ -48,6 +50,7 @@ interface JobRow extends Job {
   owner_id: string;
   request_key: string;
   payload_hash: string;
+  noticeJson: string | null;
 }
 export interface JobEvent {
   id: string;
@@ -86,6 +89,7 @@ export interface AccountRecord extends Account {
   recoveryHash: string;
 }
 const publicJob = (row: JobRow): Job => ({
+  ...(row.noticeJson ? { notice: normalizeNotice(JSON.parse(row.noticeJson)) } : {}),
   id: row.id,
   kind: row.kind,
   title: row.title,
@@ -96,7 +100,7 @@ const publicJob = (row: JobRow): Job => ({
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });
-const selectJob = `SELECT id, owner_id, request_key, payload_hash, kind, title, instructions, assigned_staff AS assignedStaff, status, execution_mode AS executionMode, created_at AS createdAt, updated_at AS updatedAt FROM jobs`;
+const selectJob = `SELECT id, owner_id, request_key, payload_hash, notice_json AS noticeJson, kind, title, instructions, assigned_staff AS assignedStaff, status, execution_mode AS executionMode, created_at AS createdAt, updated_at AS updatedAt FROM jobs`;
 
 export function createStore(
   filename: string,
@@ -113,7 +117,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 11) {
+  if (version > 12) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -202,6 +206,10 @@ export function createStore(
   }
   if (version < 11) {
     try { db.exec(AI_REVIEW_SCHEMA); }
+    catch (error) { if (db.isTransaction) db.exec("ROLLBACK"); db.close(); throw error; }
+  }
+  if (version < 12) {
+    try { db.exec(NOTICE_SCHEMA); }
     catch (error) { if (db.isTransaction) db.exec("ROLLBACK"); db.close(); throw error; }
   }
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
@@ -493,13 +501,14 @@ export function createStore(
           .get(account ?? owner, key) as unknown as JobRow | undefined;
         if (existing) {
           if (existing.payload_hash !== hash) throw new ConflictError();
+          const job = publicJob(existing);
           db.exec("COMMIT");
-          return { job: publicJob(existing), replayed: true };
+          return { job, replayed: true };
         }
         const id = randomUUID(),
           now = new Date().toISOString();
         db.prepare(
-          `INSERT INTO jobs (id, owner_id, request_key, payload_hash, kind, title, instructions, assigned_staff, status, execution_mode, created_at, updated_at, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received', 'not_connected', ?, ?, ?)`,
+          `INSERT INTO jobs (id, owner_id, request_key, payload_hash, kind, title, instructions, assigned_staff, status, execution_mode, created_at, updated_at, account_id, notice_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'received', 'not_connected', ?, ?, ?, ?)`,
         ).run(
           id,
           owner,
@@ -512,6 +521,7 @@ export function createStore(
           now,
           now,
           account,
+          input.notice ? JSON.stringify(input.notice) : null,
         );
         db.prepare("INSERT INTO job_events VALUES (?, ?, ?, ?, ?)").run(
           randomUUID(),
@@ -523,8 +533,9 @@ export function createStore(
         const row = db
           .prepare(`${selectJob} WHERE id = ? AND owner_id = ?`)
           .get(id, owner) as unknown as JobRow;
+        const job = publicJob(row);
         db.exec("COMMIT");
-        return { job: publicJob(row), replayed: false };
+        return { job, replayed: false };
       } catch (error) {
         db.exec("ROLLBACK");
         throw error;

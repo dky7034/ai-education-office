@@ -2475,3 +2475,15 @@ h1 {
 .ai-events { padding-left: 20px; font-size: 12px; color: #4d6556; }
 .ai-text { margin-top: 12px; padding: 10px; border: 1px solid #b6cbbd; border-radius: 6px; }
 .ai-text pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.65; }
+
+.request-form label.notice-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.request-form .notice-toggle input[type="checkbox"] {
+  margin: 0;
+  padding: 0;
+  width: auto;
+  flex: 0 0 auto;
+}

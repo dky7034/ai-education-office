@@ -1,3 +1,4 @@
+import NoticeDraft, { NoticeFields, emptyNotice } from "./NoticeDraft";
 import AiActivity from "./AiActivity";
 import { parseAiActivity } from "./aiActivity";
 import AiRuns from "./AiRuns";
@@ -108,6 +109,9 @@ export default function JobWorkspace({
   const [kind, setKind] = useState<TaskKind>("survey");
   const [title, setTitle] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [structuredNotice, setStructuredNotice] = useState(false);
+  const [noticeInput, setNoticeInput] = useState(emptyNotice);
+  const noticeMode = kind === "notice" && structuredNotice;
   const requestKey = useRef<string | null>(null);
   const counter = useRef(0);
   const generation = useRef(0);
@@ -304,7 +308,7 @@ export default function JobWorkspace({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (saving || !connected || loading) return;
-    if (title.trim().length < 2 || !instructions.trim()) {
+    if (title.trim().length < 2 || (!noticeMode && !instructions.trim())) {
       setFormError("제목은 2자 이상, 요청 내용은 1자 이상 입력해 주세요.");
       return;
     }
@@ -318,13 +322,14 @@ export default function JobWorkspace({
         {
           method: "POST",
           headers: { "Idempotency-Key": requestKey.current },
-          body: JSON.stringify({ kind, title, instructions }),
+          body: JSON.stringify({ kind, title, ...(noticeMode ? {notice: noticeInput} : {instructions}) }),
         },
       );
       if (!alive.current) return;
       select(result.job.id);
       setTitle("");
       setInstructions("");
+      setNoticeInput(emptyNotice());
       requestKey.current = null;
       setNotice(
         "업무 요청을 저장했습니다. 자동 실행은 아직 연결되지 않았습니다.",
@@ -447,6 +452,11 @@ export default function JobWorkspace({
               placeholder="예: 가상 교육 과정 설문 집계 요청"
               autoComplete="off"
             />
+            {kind === "notice" && <label className="notice-toggle">
+              <input type="checkbox" checked={structuredNotice} onChange={(e) => {setStructuredNotice(e.target.checked); edited();}} />
+              목적·대상·핵심 내용으로 작성
+            </label>}
+            {noticeMode ? <NoticeFields value={noticeInput} onChange={(next) => {setNoticeInput(next); edited();}} /> : <>
             <label htmlFor="request-instructions">
               요청 내용 <span>필수 · 최대 5,000자</span>
             </label>
@@ -465,6 +475,7 @@ export default function JobWorkspace({
             <p className="input-count">
               {instructions.length.toLocaleString("ko-KR")} / 5,000자
             </p>
+            </>}
             <button className="primary-button" type="submit">
               {saving ? "저장 중…" : "업무 요청 저장"}
               <ArrowRight size={14} />
@@ -682,6 +693,7 @@ export default function JobWorkspace({
                       {detail.job.instructions}
                     </dd>
                   </dl>
+                  {detail.job.kind === "notice" && detail.job.notice && <NoticeDraft key={`${accountId}:${detail.job.id}`} job={detail.job} accountId={accountId} onUnauthorized={onUnauthorized} />}
                   <section
                     className="job-activity-detail"
                     aria-label="업무 집계·검토 현황"

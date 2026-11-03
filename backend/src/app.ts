@@ -1,3 +1,4 @@
+import { normalizeNotice, noticeInstructions, noticeDraft, NoticeError } from "./noticeDraft.ts";
 import { aiRoutes } from "./aiRoutes.ts";
 import type { AiConfig } from "./aiStore.ts";
 import { JOB_FILTERS, type JobFilter } from "./jobSearch.ts";
@@ -150,20 +151,24 @@ export function createApp(
       !body ||
       Array.isArray(body) ||
       Object.keys(body).some(
-        (k) => !["kind", "title", "instructions"].includes(k),
+        (k) => !["kind", "title", "instructions", "notice"].includes(k),
       ) ||
       typeof body.kind !== "string" ||
       !Object.hasOwn(ASSIGNEES, body.kind) ||
       typeof body.title !== "string" ||
-      typeof body.instructions !== "string"
+      (body.notice === undefined && typeof body.instructions !== "string")
+      || (body.notice !== undefined && (body.kind !== "notice" || body.instructions !== undefined))
     ) {
       res
         .status(400)
         .json({ error: "업무 종류, 제목, 요청 내용을 확인해 주세요." });
       return;
     }
+    let notice: ReturnType<typeof normalizeNotice> | undefined;
+    try { notice = body.notice === undefined ? undefined : normalizeNotice(body.notice); }
+    catch (error) { res.status(400).json({error: error instanceof NoticeError ? error.message : "공지 입력을 확인해 주세요."}); return; }
     const title = body.title.trim(),
-      instructions = body.instructions.trim();
+      instructions = notice ? noticeInstructions(notice) : body.instructions.trim();
     if (
       title.length < 2 ||
       title.length > 100 ||
@@ -183,6 +188,7 @@ export function createApp(
           kind: body.kind as Kind,
           title,
           instructions,
+          ...(notice ? {notice} : {}),
         },
         res.locals.account.id,
       );
@@ -196,6 +202,19 @@ export function createApp(
         return;
       }
       throw error;
+    }
+  });
+  app.get("/api/jobs/:id/notice-draft", (req, res) => {
+    if (Object.keys(req.query).length) { res.status(400).json({error: "초안 조회 조건을 지정하지 마세요."}); return; }
+    const detail = uuid.test(String(req.params.id)) ? store.detail(res.locals.account.id, String(req.params.id)) : null;
+    if (!detail) { res.status(404).json({error: "업무를 찾을 수 없습니다."}); return; }
+    if (detail.job.kind !== "notice" || !detail.job.notice) { res.status(409).json({error: "구조화된 공지 요청이 있는 업무에서만 초안을 내려받을 수 있습니다."}); return; }
+    try {
+      const bytes = noticeDraft(detail.job.title, detail.job.notice, detail.job);
+      res.set({"Content-Type": "text/plain; charset=utf-8", "Content-Disposition": `attachment; filename="office-notice-${detail.job.id}.txt"`});
+      res.send(bytes);
+    } catch (error) {
+      if (error instanceof NoticeError) res.status(409).json({error: error.message}); else throw error;
     }
   });
   app.get(["/api/jobs/:id", "/api/jobs/:id/events"], (req, res) => {

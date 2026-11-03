@@ -1,7 +1,11 @@
 import type { DatabaseSync } from "node:sqlite";
 // Only for temporary fixtures synthesized from today's schema, before testing
 // an older upgrade path. Production migrations never drop these records.
+export function dropNoticeSchema(db: DatabaseSync) {
+  if (db.prepare("PRAGMA table_info(jobs)").all().some((row) => row.name === "notice_json")) db.exec("ALTER TABLE jobs DROP COLUMN notice_json;");
+}
 export function dropAiReviewSchema(db: DatabaseSync) {
+  dropNoticeSchema(db);
   db.exec("DROP TRIGGER IF EXISTS activity_ai_review; DROP TRIGGER IF EXISTS ai_review_update; DROP TRIGGER IF EXISTS ai_review_delete; DROP TRIGGER IF EXISTS ai_review_owner; DROP TABLE IF EXISTS ai_run_reviews;");
 }
 export function dropAiSchema(db: DatabaseSync) {
