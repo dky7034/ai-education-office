@@ -113,3 +113,5 @@ v11은 AI 실행별 승인/반려 기록과 불변·소유권·계정 이벤트 
 완료 실행의 `GET /api/jobs/:jobId/attachments/:fileId/runs/:runId/mail-draft`는 [설문 요약 초안](../docs/SURVEY_MAIL.md)을 메모리에서 TXT로 생성합니다. 현재 저장 JSON만 사용하고 보관 3종·검토 대상·스키마는 변경하지 않습니다.
 
 v12는 jobs.notice_json(nullable)을 추가합니다. 구조화 공지 생성/다운로드·기존 요청 호환·원자적 저장·검수 범위는 [공지·메일 초안](../docs/NOTICE_DRAFT.md)을 따릅니다. 기존 집계/AI/검토 테이블은 변경하지 않습니다.
+
+읽기 전용 `GET /api/jobs/:jobId/attachments/:fileId/evidence?revision=&row=`의 권한·원본/선택 재검증·파싱 한도는 [근거 행 확인](../docs/ROW_EVIDENCE.md)을 따릅니다. 스키마는 v12를 유지합니다.

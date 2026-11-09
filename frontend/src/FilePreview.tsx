@@ -1,3 +1,4 @@
+import RowEvidence from "./RowEvidence";
 import { useEffect, useRef, useState } from "react";
 import SurveySettings, { type QuestionDraft } from "./SurveySettings";
 import BackgroundSummary from "./BackgroundSummary";
@@ -350,6 +351,9 @@ export default function FilePreview({
           !dirty &&
           result.selection.sheetId === result.preview.sheetId &&
           result.selection.headerRow === result.preview.headerRow ? (
+            <>
+            <RowEvidence key={`evidence:${accountId}:${fileId}:${result.selection.revision}`} jobId={jobId} fileId={fileId} accountId={accountId}
+              revision={result.selection.revision} sourceHash={result.selection.sourceHash} headerRow={result.selection.headerRow} sheetId={result.selection.sheetId} columns={result.selection.columns} onUnauthorized={onUnauthorized} />
             <FileSummary
               key={result.selection.revision}
               jobId={jobId}
@@ -358,6 +362,7 @@ export default function FilePreview({
               revision={result.selection.revision}
               onUnauthorized={onUnauthorized}
             />
+            </>
           ) : (
             <p className="session-note">
               기초 집계를 실행하려면 분석할 열을 선택해 먼저 저장해 주세요.

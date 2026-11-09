@@ -1,3 +1,4 @@
+import { rowEvidence } from "./rowEvidence.ts";
 import express, { type RequestHandler } from "express";
 import { readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -107,6 +108,30 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
     } catch (error) {
       errorResponse(error, res, next);
     }
+  });
+  router.get(path + "/evidence", async (req, res, next) => {
+    const item = res.locals.attachment as Attachment;
+    if (Object.keys(req.query).some((key) => !["revision", "row"].includes(key))
+      || typeof req.query.revision !== "string" || !/^[1-9][0-9]*$/.test(req.query.revision)
+      || !Number.isSafeInteger(Number(req.query.revision))
+      || typeof req.query.row !== "string" || !/^[1-9][0-9]*$/.test(req.query.row)
+      || !Number.isSafeInteger(Number(req.query.row)) || Number(req.query.row) > 20000) {
+      res.status(400).json({error: "저장한 선택 버전과 1~20,000 사이의 행 번호를 지정해 주세요."}); return;
+    }
+    try {
+      const selection = store.selection(res.locals.account.id, item.jobId, item.id);
+      if (!selection || selection.revision !== Number(req.query.revision) || selection.sourceHash !== item.sha256) throw new ConflictError();
+      const bytes = await original(store, item);
+      let xml: Map<string, string> | null = null;
+      try { if (item.format === "xlsx") xml = await readXlsx(bytes); }
+      catch { throw new PreviewError("XLSX 구조를 읽지 못했습니다."); }
+      const evidence = rowEvidence(item.format, bytes, xml, selection, Number(req.query.row));
+      requireAccount(req, res, () => {
+        const latest = store.selection(res.locals.account.id, item.jobId, item.id);
+        if (latest?.revision !== selection.revision || latest.sourceHash !== item.sha256) { errorResponse(new ConflictError(), res, next); return; }
+        res.json({evidence: {...evidence, jobId: item.jobId, fileId: item.id, revision: selection.revision, sourceHash: item.sha256}});
+      });
+    } catch (error) { errorResponse(error, res, next); }
   });
   router.put(path + "/selection", async (req, res, next) => {
     const item = res.locals.attachment as Attachment,
