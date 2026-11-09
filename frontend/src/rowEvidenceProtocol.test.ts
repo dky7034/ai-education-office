@@ -10,6 +10,13 @@ describe("row evidence response", () => {
     for (const change of [{jobId: "else"}, {fileId: "else"}, {revision: 2}, {sourceHash: "b".repeat(64)}, {sheetId: "0"}, {headerRow: 2}, {rowNumber: 23},
       {totalRows: 2}, {totalRows: 20001}, {cells: [{...evidence.cells[0], index: 1}]}]) expect(() => parse({evidence: {...evidence, ...change}})).toThrow();
   });
+  it("binds displayed mapping to the saved selection while ignoring JSON key order", () => {
+    const mapping = {index: 0, metric: "attendance" as const, label: "가상 자료", unit: "%"};
+    const value = {evidence: {...evidence, cells: [{...evidence.cells[0], mapping: {unit: "%", label: "가상 자료", metric: "attendance", index: 0}}]}};
+    expect(parseEvidence(value, "job", "file", 1, sourceHash, 22, "csv", 1, [0], [mapping]).cells[0].mapping).toEqual(mapping);
+    expect(() => parse(value)).toThrow();
+    expect(() => parseEvidence(value, "job", "file", 1, sourceHash, 22, "csv", 1, [0], [{...mapping, unit: "회"}])).toThrow();
+  });
   it("rejects malformed, oversized and duplicate cells", () => {
     for (const cells of [[], [{...evidence.cells[0], kind: "script"}], [{...evidence.cells[0], value: "x".repeat(2001)}], [evidence.cells[0], evidence.cells[0]]])
       expect(() => parse({evidence: {...evidence, cells}})).toThrow();

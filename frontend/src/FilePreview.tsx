@@ -1,3 +1,5 @@
+import MonitoringSettings from "./MonitoringSettings";
+import type { MonitorMapping } from "./monitoring";
 import RowEvidence from "./RowEvidence";
 import { useEffect, useRef, useState } from "react";
 import SurveySettings, { type QuestionDraft } from "./SurveySettings";
@@ -5,6 +7,7 @@ import BackgroundSummary from "./BackgroundSummary";
 import FileSummary from "./FileSummary";
 import { ApiError, jobsApi } from "./jobsApi";
 interface Selection {
+  monitoring?: MonitorMapping[];
   questions: { index: number; min: number; max: number; required: boolean }[];
   sheetId: string;
   headerRow: number;
@@ -45,6 +48,7 @@ export default function FilePreview({
   const [result, setResult] = useState<Result | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null),
     [headerRow, setHeaderRow] = useState<number | null>(null);
+  const [monitoring, setMonitoring] = useState<MonitorMapping[]>([]);
   const [questions, setQuestions] = useState<QuestionDraft[]>([]);
   const [chosen, setChosen] = useState<number[]>([]);
   const [loading, setLoading] = useState(true),
@@ -105,6 +109,7 @@ export default function FilePreview({
               }))
             : [],
         );
+        setMonitoring(selected?.sheetId === data.preview.sheetId && selected.headerRow === data.preview.headerRow ? selected.monitoring ?? [] : []);
         setDirty(false);
       })
       .catch((e) => {
@@ -134,6 +139,9 @@ export default function FilePreview({
       );
       return;
     }
+    if (monitoring.some((item) => !item.label.trim() || item.label.trim().length > 60 || item.unit.trim().length > 20)) {
+      setError("지표 이름은 1~60자, 단위는 최대 20자로 입력해 주세요."); return;
+    }
     setSaving(true);
     setError("");
     setNotice("");
@@ -148,6 +156,7 @@ export default function FilePreview({
             sheetId: result.preview.sheetId,
             headerRow: result.preview.headerRow,
             columns: chosen,
+            monitoring,
             questions: questions.map((q) => ({
               ...q,
               min: Number(q.min),
@@ -159,6 +168,7 @@ export default function FilePreview({
       );
       if (!alive.current) return;
       setResult({ ...result, selection: response.selection });
+      setMonitoring(response.selection.monitoring ?? []);
       setDirty(false);
       setNotice(
         "분석할 열 선택을 저장했습니다. 자동 집계·AI 분석은 실행되지 않습니다.",
@@ -300,6 +310,7 @@ export default function FilePreview({
                       setQuestions((previous) =>
                         previous.filter((q) => q.index !== column.index),
                       );
+                    if (!e.target.checked) setMonitoring((previous) => previous.filter((item) => item.index !== column.index));
                     setDirty(true);
                     setNotice("");
                   }}
@@ -320,6 +331,8 @@ export default function FilePreview({
               setNotice("");
             }}
           />
+          <MonitoringSettings columns={result.preview.columns.filter((column) => chosen.includes(column.index))} value={monitoring}
+            disabled={saving || loading} onChange={(value) => {setMonitoring(value); setDirty(true); setNotice("");}} />
           <button
             className="secondary-button"
             disabled={saving || loading || !chosen.length}
@@ -329,7 +342,7 @@ export default function FilePreview({
           </button>
           {dirty && (
             <p className="session-note">
-              저장하지 않은 열 선택·설문 설정이 있습니다. 시트·제목 행 변경이나
+              저장하지 않은 열 선택·설문·지표 설정이 있습니다. 시트·제목 행 변경이나
               다시 불러오기는 현재 선택을 초기화합니다.
             </p>
           )}
@@ -353,7 +366,7 @@ export default function FilePreview({
           result.selection.headerRow === result.preview.headerRow ? (
             <>
             <RowEvidence key={`evidence:${accountId}:${fileId}:${result.selection.revision}`} jobId={jobId} fileId={fileId} accountId={accountId}
-              revision={result.selection.revision} sourceHash={result.selection.sourceHash} headerRow={result.selection.headerRow} sheetId={result.selection.sheetId} columns={result.selection.columns} onUnauthorized={onUnauthorized} />
+              revision={result.selection.revision} sourceHash={result.selection.sourceHash} headerRow={result.selection.headerRow} sheetId={result.selection.sheetId} columns={result.selection.columns} monitoring={result.selection.monitoring ?? []} onUnauthorized={onUnauthorized} />
             <FileSummary
               key={result.selection.revision}
               jobId={jobId}

@@ -1,3 +1,4 @@
+import { MONITORING_SCHEMA, monitorMappings, type MonitorMapping } from "./monitoring.ts";
 import { NOTICE_SCHEMA, normalizeNotice, type NoticeInput } from "./noticeDraft.ts";
 import { aiActivities, aiOfficeRepository } from "./aiActivity.ts";
 import { AI_REVIEW_SCHEMA, aiReviewRepository } from "./aiReviewStore.ts";
@@ -70,6 +71,7 @@ export interface Attachment {
   createdAt: string;
 }
 export interface ColumnSelection {
+  monitoring?: MonitorMapping[];
   questions: SurveyQuestion[];
   sheetId: string;
   headerRow: number;
@@ -117,7 +119,7 @@ export function createStore(
   const version = (
     db.prepare("PRAGMA user_version").get() as { user_version: number }
   ).user_version;
-  if (version > 12) {
+  if (version > 13) {
     db.close();
     throw new Error("현재 코드가 지원하는 버전보다 최신 데이터베이스입니다.");
   }
@@ -212,6 +214,10 @@ export function createStore(
     try { db.exec(NOTICE_SCHEMA); }
     catch (error) { if (db.isTransaction) db.exec("ROLLBACK"); db.close(); throw error; }
   }
+  if (version < 13) {
+    try { db.exec(MONITORING_SCHEMA); }
+    catch (error) { if (db.isTransaction) db.exec("ROLLBACK"); db.close(); throw error; }
+  }
   const selectAttachment = `SELECT id, job_id AS jobId, name, size, sha256, format, created_at AS createdAt FROM attachments`;
   return {
     ...runRepository(db),
@@ -229,7 +235,7 @@ export function createStore(
     ): ColumnSelection | null {
       const row = db
         .prepare(
-          `SELECT s.sheet_id AS sheetId, s.header_row AS headerRow, s.columns_json AS columnsJson, s.questions_json AS questionsJson, s.source_hash AS sourceHash, s.revision, s.updated_at AS updatedAt FROM column_selections s JOIN attachments a ON a.id = s.file_id JOIN jobs j ON j.id = a.job_id WHERE j.account_id = ? AND j.id = ? AND a.id = ?`,
+          `SELECT s.sheet_id AS sheetId, s.header_row AS headerRow, s.columns_json AS columnsJson, s.questions_json AS questionsJson, s.monitoring_json AS monitoringJson, s.source_hash AS sourceHash, s.revision, s.updated_at AS updatedAt FROM column_selections s JOIN attachments a ON a.id = s.file_id JOIN jobs j ON j.id = a.job_id WHERE j.account_id = ? AND j.id = ? AND a.id = ?`,
         )
         .get(account, jobId, fileId) as
         | {
@@ -237,17 +243,19 @@ export function createStore(
             headerRow: number;
             columnsJson: string;
             questionsJson: string;
+            monitoringJson: string;
             sourceHash: string;
             revision: number;
             updatedAt: string;
           }
         | undefined;
       if (!row) return null;
-      const { columnsJson, questionsJson, ...rest } = row;
+      const { columnsJson, questionsJson, monitoringJson, ...rest } = row;
       return {
         ...rest,
         columns: JSON.parse(columnsJson) as number[],
         questions: JSON.parse(questionsJson) as SurveyQuestion[],
+        monitoring: monitorMappings(JSON.parse(monitoringJson), JSON.parse(columnsJson)),
       };
     },
     saveSelection(
@@ -260,6 +268,7 @@ export function createStore(
         headerRow: number;
         columns: number[];
         questions?: SurveyQuestion[];
+        monitoring?: MonitorMapping[];
       },
     ) {
       db.exec("BEGIN IMMEDIATE");
@@ -271,14 +280,17 @@ export function createStore(
           .get(account, jobId, fileId) as { sha256: string } | undefined;
         if (!source) throw new Error("첨부 권한 없음");
         const previous = db
-          .prepare("SELECT revision FROM column_selections WHERE file_id = ?")
-          .get(fileId) as { revision: number } | undefined;
+          .prepare("SELECT revision,sheet_id AS sheetId,header_row AS headerRow,source_hash AS sourceHash,columns_json AS columnsJson,monitoring_json AS monitoringJson FROM column_selections WHERE file_id = ?")
+          .get(fileId) as { revision: number; sheetId: string; headerRow: number; sourceHash: string; columnsJson: string; monitoringJson: string } | undefined;
         const revision = previous?.revision ?? 0;
         if (revision !== expectedRevision) throw new ConflictError();
         const updatedAt = new Date().toISOString(),
           columns = [...input.columns].sort((a, b) => a - b);
+        const inherited = input.monitoring === undefined && previous?.sheetId === input.sheetId && previous.headerRow === input.headerRow && previous.sourceHash === source.sha256
+          ? monitorMappings(JSON.parse(previous.monitoringJson), JSON.parse(previous.columnsJson)).filter((item) => columns.includes(item.index)) : [];
+        const monitoring = input.monitoring === undefined ? inherited : monitorMappings(input.monitoring, columns);
         db.prepare(
-          `INSERT INTO column_selections (file_id, sheet_id, header_row, columns_json, source_hash, revision, updated_at, questions_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(file_id) DO UPDATE SET sheet_id=excluded.sheet_id, header_row=excluded.header_row, columns_json=excluded.columns_json, source_hash=excluded.source_hash, revision=excluded.revision, updated_at=excluded.updated_at, questions_json=excluded.questions_json`,
+          `INSERT INTO column_selections (file_id, sheet_id, header_row, columns_json, source_hash, revision, updated_at, questions_json, monitoring_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(file_id) DO UPDATE SET sheet_id=excluded.sheet_id, header_row=excluded.header_row, columns_json=excluded.columns_json, source_hash=excluded.source_hash, revision=excluded.revision, updated_at=excluded.updated_at, questions_json=excluded.questions_json, monitoring_json=excluded.monitoring_json`,
         ).run(
           fileId,
           input.sheetId,
@@ -288,11 +300,13 @@ export function createStore(
           revision + 1,
           updatedAt,
           JSON.stringify(input.questions ?? []),
+          JSON.stringify(monitoring),
         );
         db.exec("COMMIT");
         return {
           ...input,
           questions: input.questions ?? [],
+          monitoring,
           columns,
           sourceHash: source.sha256,
           revision: revision + 1,

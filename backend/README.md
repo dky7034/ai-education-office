@@ -114,4 +114,6 @@ v11은 AI 실행별 승인/반려 기록과 불변·소유권·계정 이벤트 
 
 v12는 jobs.notice_json(nullable)을 추가합니다. 구조화 공지 생성/다운로드·기존 요청 호환·원자적 저장·검수 범위는 [공지·메일 초안](../docs/NOTICE_DRAFT.md)을 따릅니다. 기존 집계/AI/검토 테이블은 변경하지 않습니다.
 
-읽기 전용 `GET /api/jobs/:jobId/attachments/:fileId/evidence?revision=&row=`의 권한·원본/선택 재검증·파싱 한도는 [근거 행 확인](../docs/ROW_EVIDENCE.md)을 따릅니다. 스키마는 v12를 유지합니다.
+읽기 전용 `GET /api/jobs/:jobId/attachments/:fileId/evidence?revision=&row=`의 권한·원본/선택 재검증·파싱 한도는 [근거 행 확인](../docs/ROW_EVIDENCE.md)을 따릅니다. 근거 행 조회는 스키마나 저장 상태를 바꾸지 않습니다.
+
+v13은 column_selections.monitoring_json(기본 [])만 추가합니다. 선택 PUT의 선택적 monitoring·생략/해제 호환·공유 버전·근거 셀 mapping은 [지표 연결 안내](../docs/MONITORING_MAPPING.md)를 따릅니다.

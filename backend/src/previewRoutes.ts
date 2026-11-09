@@ -1,3 +1,4 @@
+import { monitorMappings } from "./monitoring.ts";
 import { rowEvidence } from "./rowEvidence.ts";
 import express, { type RequestHandler } from "express";
 import { readFile, stat } from "node:fs/promises";
@@ -147,6 +148,7 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
             "columns",
             "revision",
             "questions",
+            "monitoring",
           ].includes(key),
       ) ||
       typeof body.sheetId !== "string" ||
@@ -203,6 +205,7 @@ export function previewRoutes(store: Store, requireAccount: RequestHandler) {
                 headerRow: body.headerRow,
                 columns: body.columns,
                 questions: surveyQuestions(body.questions, body.columns),
+                ...(body.monitoring === undefined ? {} : {monitoring: monitorMappings(body.monitoring, body.columns)}),
               },
             ),
           });

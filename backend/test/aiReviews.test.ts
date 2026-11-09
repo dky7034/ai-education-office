@@ -122,6 +122,6 @@ test("v10→v11 추가 마이그레이션은 이력을 보존하고 실패 시 �
   f.db.exec("DROP TRIGGER activity_ai_review"); const migrated = createStore(f.f.filename);
   try { assert.deepEqual(migrated.aiRun(f.a.user.id, f.job.id, f.id), previous); assert.deepEqual(migrated.activityHead(f.a.user.id), head); }
   finally { migrated.close(); }
-  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version, 12);
+  assert.equal(f.db.prepare("PRAGMA user_version").get()!.user_version, 13);
   assert.equal(f.db.prepare("PRAGMA foreign_key_check").all().length, 0);
 });

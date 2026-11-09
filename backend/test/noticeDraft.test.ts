@@ -76,7 +76,7 @@ test("v11 to v12 preserves jobs and cursors and rolls back a failed column migra
   const before = JSON.stringify(db.prepare("SELECT * FROM jobs").all().map(({notice_json, ...row}) => row));
   dropNoticeSchema(db); db.exec("PRAGMA user_version=11");
   const migrated = createStore(f.filename); assert.equal(migrated.detail(a.user.id, job.id)!.job.instructions, "원문 유지"); migrated.close();
-  assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 12);
+  assert.equal(db.prepare("PRAGMA user_version").get()!.user_version, 13);
   assert.equal(JSON.stringify(db.prepare("SELECT * FROM jobs").all().map(({notice_json, ...row}) => row)), before);
   db.exec("PRAGMA user_version=11"); // Inject an already-present column to force ALTER TABLE failure.
   assert.throws(() => createStore(f.filename));

@@ -2487,3 +2487,19 @@ h1 {
   width: auto;
   flex: 0 0 auto;
 }
+
+.monitoring-settings .survey-fields > label {
+  align-items: flex-start;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+.monitoring-settings .survey-fields input,
+.monitoring-settings .survey-fields select {
+  width: 220px;
+  max-width: 100%;
+  padding: 6px;
+  border: 1px solid #b6cbbd;
+  border-radius: 5px;
+  font: inherit;
+}

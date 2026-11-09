@@ -1,3 +1,4 @@
+import { monitorMappings } from "./monitoring.ts";
 import { scanTable, PreviewError, type CellFlags } from "./tabular.ts";
 import type { ColumnSelection } from "./store.ts";
 export const EVIDENCE_CELL_CHARS = 2000;
@@ -8,6 +9,7 @@ export function rowEvidence(format: "csv" | "xlsx", bytes: Buffer, xml: Map<stri
   const indexes = [...selection.columns].sort((a, b) => a - b);
   if (!indexes.length || indexes.length > 100 || new Set(indexes).size !== indexes.length
     || indexes.some((index) => !Number.isInteger(index) || index < 0 || index >= 100)) throw new PreviewError("저장된 열 선택을 확인해 주세요.");
+  const monitoring = monitorMappings(selection.monitoring ?? [], indexes);
   let values: string[] = [], flags: CellFlags = {formulas: new Set(), errors: new Set()}, rowPresent = false;
   const table = scanTable(format, bytes, xml, selection.sheetId, selection.headerRow, (number, data, types) => {
     if (number === rowNumber) { values = data; flags = types; rowPresent = true; }
@@ -17,7 +19,7 @@ export function rowEvidence(format: "csv" | "xlsx", bytes: Buffer, xml: Map<stri
     const column = table.columns.find((column) => column.index === index);
     if (!column) throw new PreviewError("파일에 없는 열은 확인할 수 없습니다.");
     const raw = values[index] ?? "", characters = Array.from(raw);
-    return {...column, value: characters.slice(0, EVIDENCE_CELL_CHARS).join(""), truncated: characters.length > EVIDENCE_CELL_CHARS,
+    return {...column, mapping: monitoring.find((item) => item.index === index) ?? null, value: characters.slice(0, EVIDENCE_CELL_CHARS).join(""), truncated: characters.length > EVIDENCE_CELL_CHARS,
       kind: flags.formulas.has(index) ? "formula" as const : flags.errors.has(index) ? "error" as const : !raw.trim() ? "blank" as const : "value" as const};
   });
   const result = {sheetId: table.sheetId, sheetName: table.sheets.find((sheet) => sheet.id === table.sheetId)!.name,
